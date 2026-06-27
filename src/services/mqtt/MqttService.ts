@@ -9,14 +9,14 @@ global.Buffer = global.Buffer || Buffer;
 import mqtt from 'precompiled-mqtt';
 import { BusPosition } from '../../types/shared-types';
 import routesData from '../../data/routes-data.json';
+import { config } from '../../config';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 type VehicleUpdateCallback = (vehicle: BusPosition) => void;
 type StatusCallback = (status: ConnectionStatus, error?: string) => void;
 
 // Nimbus Locator config
-const FLESPI_TOKEN = 'REMOVED-FLESPI-TOKEN';
-const LOCATOR_HASH = '4d5af2578d1f42adabc3165aa4456953';
+const LOCATOR_HASH = config.nimbus.locatorHash;
 
 // Nimbus topic pattern (from bundle.js)
 const NIMBUS_TOPIC = `nimbus/locator/${LOCATOR_HASH}/#`;
@@ -237,6 +237,13 @@ class MqttService {
   async connect(): Promise<void> {
     if (this.client || this.isConnecting) return;
 
+    if (!config.flespi.token) {
+      const message = 'Flespi token missing. Set FLESPI_TOKEN or EXPO_PUBLIC_FLESPI_TOKEN.';
+      console.error('[MQTT] ❌', message);
+      this.notifyStatus('error', message);
+      return;
+    }
+
     this.isConnecting = true;
     this.notifyStatus('connecting');
 
@@ -251,8 +258,8 @@ class MqttService {
     await this.fetchInitialUnits();
 
     try {
-      this.client = mqtt.connect('wss://mqtt.flespi.io', {
-        username: FLESPI_TOKEN,
+      this.client = mqtt.connect(config.mqtt.broker, {
+        username: config.flespi.token,
         clientId: `nimbus_${Date.now()}`,
         clean: true,
         protocolVersion: 5
