@@ -5,6 +5,7 @@ import {
   View,
   TextInput,
   TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   ScrollView,
   useColorScheme,
@@ -58,6 +59,7 @@ function AppContent() {
   const [selectedStop, setSelectedStop] = useState<BusStop | null>(null);
   const [selectedStopDistance, setSelectedStopDistance] = useState<number>(0);
   const [selectedLine, setSelectedLine] = useState<string | null>(null);
+  const [mapExpanded, setMapExpanded] = useState(false); // harita büyük/küçük
 
   // Hooks
   const { location, error: locationError, isLoading: locationLoading } = useLocation();
@@ -240,7 +242,7 @@ function AppContent() {
       <StatusBar style={theme.isDark ? 'light' : 'dark'} />
 
       {/* Map */}
-      <View style={styles.mapContainer}>
+      <View style={mapExpanded ? styles.mapExpanded : styles.mapCollapsed}>
         {isLoading ? (
           <View style={[styles.mapPlaceholder, { backgroundColor: theme.colors.surface }]}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -263,10 +265,26 @@ function AppContent() {
             onStopPress={handleStopPress}
           />
         )}
+
+        {/* Küçükken: harita önizleme; dokununca büyür */}
+        {!mapExpanded && !isLoading && !locationError && (
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMapExpanded(true)}>
+            <View style={styles.expandHint}>
+              <Text style={styles.expandHintText}>Haritaya dokun → büyüt ⤢</Text>
+            </View>
+          </Pressable>
+        )}
+
+        {/* Büyükken: küçült butonu (harita pan/zoom edilebilir) */}
+        {mapExpanded && (
+          <TouchableOpacity style={styles.collapseBtn} onPress={() => setMapExpanded(false)}>
+            <Text style={styles.collapseBtnText}>Küçült ✕</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Bottom Panel */}
-      <View style={[styles.bottomContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+      <View style={[styles.bottomContainer, mapExpanded ? styles.bottomExpanded : styles.bottomCollapsed, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
         {/* Kaydırılabilir kart alanı (harita için yükseklik tavanı) */}
         <ScrollView
           style={styles.bottomScroll}
@@ -382,8 +400,40 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  mapContainer: {
-    flex: 1,
+  // Küçük (önizleme) ve büyük (etkileşimli) harita boyutları
+  mapCollapsed: {
+    flex: 3,
+  },
+  mapExpanded: {
+    flex: 5,
+  },
+  expandHint: {
+    position: 'absolute',
+    bottom: 8,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  expandHintText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  collapseBtn: {
+    position: 'absolute',
+    bottom: 8,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  collapseBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   mapPlaceholder: {
     flex: 1,
@@ -404,8 +454,14 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderTopWidth: 1,
     gap: 8,
-    // Alt panel ekranın yarısını geçmesin; kalan yer haritaya gider
-    maxHeight: '55%',
+  },
+  // Harita küçükken panel geniş (kartlar tam görünür, kaydırma yok),
+  // harita büyükken panel ~yarıya iner (kartlar gerekirse kaydırılır)
+  bottomCollapsed: {
+    flex: 7,
+  },
+  bottomExpanded: {
+    flex: 5,
   },
   bottomScroll: {
     flexGrow: 0,
