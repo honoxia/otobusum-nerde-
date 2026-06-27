@@ -11,6 +11,7 @@ import { BusPosition } from '../../types/shared-types';
 import routesData from '../../data/routes-data.json';
 import { config } from '../../config';
 import nimbusService from '../NimbusService';
+import { devLog, devWarn } from '../../utils/devLog';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 type VehicleUpdateCallback = (vehicle: BusPosition) => void;
@@ -24,6 +25,9 @@ const NIMBUS_TOPIC = `nimbus/locator/${LOCATOR_HASH}/#`;
 
 // Nimbus Locator API - initial units fetch
 const NIMBUS_LOCATOR_URL = `https://nimbus.wialon.com/locator/api/${LOCATOR_HASH}/data`;
+
+/** MQTT payload boyut üst sınırı (DoS koruması) */
+const MAX_MQTT_MESSAGE_BYTES = 256 * 1024;
 
 // Route ID -> Line mapping (MQTT'deki r alanından hat bulmak için)
 interface RouteMapping {
@@ -64,12 +68,12 @@ class MqttService {
           }
         });
       });
-      console.log(`[MQTT] ✅ Route mapping built: ${count} routes -> ${this.routeIdToLine.size} unique IDs`);
+      devLog(`[MQTT] ✅ Route mapping built: ${count} routes -> ${this.routeIdToLine.size} unique IDs`);
 
       // Örnek birkaç mapping göster
       const samples = [...this.routeIdToLine.entries()].slice(0, 5);
       samples.forEach(([id, info]) => {
-        console.log(`[MQTT]    Route ${id} -> ${info.line}`);
+        devLog(`[MQTT]    Route ${id} -> ${info.line}`);
       });
     } catch (error) {
       console.error('[MQTT] ❌ Route mapping build failed:', error);
@@ -89,8 +93,8 @@ class MqttService {
    * Web sitesinin kullandığı aynı endpoint'leri dene
    */
   private async fetchInitialUnits(): Promise<void> {
-    console.warn('[NIMBUS] ========================================');
-    console.warn('[NIMBUS] Fetching initial units from HTTP...');
+    devWarn('[NIMBUS] ========================================');
+    devWarn('[NIMBUS] Fetching initial units from HTTP...');
 
     // Web sitesinin kullandığı endpoint'ler
     const endpoints = [
@@ -105,7 +109,7 @@ class MqttService {
 
     for (const url of endpoints) {
       try {
-        console.warn(`[NIMBUS] Trying: ${url}`);
+        devWarn(`[NIMBUS] Trying: ${url}`);
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -115,86 +119,86 @@ class MqttService {
           },
         });
 
-        console.warn(`[NIMBUS] ${url} -> Status: ${response.status}`);
+        devWarn(`[NIMBUS] ${url} -> Status: ${response.status}`);
 
         if (!response.ok) {
           const text = await response.text();
-          console.warn(`[NIMBUS] Response: ${text.substring(0, 200)}`);
+          devWarn(`[NIMBUS] Response: ${text.substring(0, 200)}`);
           continue;
         }
 
         const text = await response.text();
-        console.warn(`[NIMBUS] Raw response (first 500 chars):`);
-        console.warn(text.substring(0, 500));
+        devWarn(`[NIMBUS] Raw response (first 500 chars):`);
+        devWarn(text.substring(0, 500));
 
         try {
           const data = JSON.parse(text);
-          console.warn(`[NIMBUS] ✅ Parsed JSON! Keys: ${Object.keys(data).join(', ')}`);
+          devWarn(`[NIMBUS] ✅ Parsed JSON! Keys: ${Object.keys(data).join(', ')}`);
 
           // units array
           if (data.units && Array.isArray(data.units)) {
-            console.warn(`[NIMBUS] 🎉 Found ${data.units.length} units!`);
+            devWarn(`[NIMBUS] 🎉 Found ${data.units.length} units!`);
             let sampleCount = 0;
             data.units.forEach((unit: any) => {
               if (unit.id && unit.nm) {
                 this.nameCache.set(String(unit.id), unit.nm);
                 if (sampleCount < 15) {
-                  console.warn(`[NIMBUS] Unit: ${unit.id} -> "${unit.nm}"`);
+                  devWarn(`[NIMBUS] Unit: ${unit.id} -> "${unit.nm}"`);
                   sampleCount++;
                 }
               }
             });
-            console.warn(`[NIMBUS] ✅ Cached ${this.nameCache.size} unit names`);
+            devWarn(`[NIMBUS] ✅ Cached ${this.nameCache.size} unit names`);
             return;
           }
 
           // u array (kısa format)
           if (data.u && Array.isArray(data.u)) {
-            console.warn(`[NIMBUS] 🎉 Found ${data.u.length} units (u array)!`);
+            devWarn(`[NIMBUS] 🎉 Found ${data.u.length} units (u array)!`);
             data.u.forEach((unit: any, idx: number) => {
               if (unit.id && unit.nm) {
                 this.nameCache.set(String(unit.id), unit.nm);
                 if (idx < 15) {
-                  console.warn(`[NIMBUS] Unit: ${unit.id} -> "${unit.nm}"`);
+                  devWarn(`[NIMBUS] Unit: ${unit.id} -> "${unit.nm}"`);
                 }
               }
             });
-            console.warn(`[NIMBUS] ✅ Cached ${this.nameCache.size} unit names`);
+            devWarn(`[NIMBUS] ✅ Cached ${this.nameCache.size} unit names`);
             return;
           }
 
           // Direct array
           if (Array.isArray(data)) {
-            console.warn(`[NIMBUS] 🎉 Found array with ${data.length} items`);
+            devWarn(`[NIMBUS] 🎉 Found array with ${data.length} items`);
             data.forEach((unit: any, idx: number) => {
               if (unit.id && unit.nm) {
                 this.nameCache.set(String(unit.id), unit.nm);
                 if (idx < 15) {
-                  console.warn(`[NIMBUS] Unit: ${unit.id} -> "${unit.nm}"`);
+                  devWarn(`[NIMBUS] Unit: ${unit.id} -> "${unit.nm}"`);
                 }
               }
             });
-            console.warn(`[NIMBUS] ✅ Cached ${this.nameCache.size} unit names`);
+            devWarn(`[NIMBUS] ✅ Cached ${this.nameCache.size} unit names`);
             return;
           }
 
         } catch (parseErr) {
-          console.warn(`[NIMBUS] JSON parse error: ${parseErr}`);
+          devWarn(`[NIMBUS] JSON parse error: ${parseErr}`);
         }
 
       } catch (error: any) {
-        console.warn(`[NIMBUS] ❌ Fetch error: ${error.message}`);
+        devWarn(`[NIMBUS] ❌ Fetch error: ${error.message}`);
       }
     }
 
     // Son çare: HTML sayfasından veri çıkarmayı dene
     try {
-      console.warn('[NIMBUS] Trying to fetch HTML page for embedded data...');
+      devWarn('[NIMBUS] Trying to fetch HTML page for embedded data...');
       const htmlUrl = `https://nimbus.wialon.com/locator/${LOCATOR_HASH}/`;
       const htmlResponse = await fetch(htmlUrl);
       if (htmlResponse.ok) {
         const html = await htmlResponse.text();
-        console.warn(`[NIMBUS] Got HTML (${html.length} chars)`);
+        devWarn(`[NIMBUS] Got HTML (${html.length} chars)`);
 
         // Look for embedded JSON data
         // Pattern: window.__INITIAL_STATE__ = {...} or similar
@@ -208,7 +212,7 @@ class MqttService {
         for (const pattern of patterns) {
           const match = html.match(pattern);
           if (match) {
-            console.warn(`[NIMBUS] Found embedded data with pattern!`);
+            devWarn(`[NIMBUS] Found embedded data with pattern!`);
             try {
               const embeddedData = JSON.parse(match[1]);
               if (Array.isArray(embeddedData)) {
@@ -217,22 +221,22 @@ class MqttService {
                     this.nameCache.set(String(unit.id), unit.nm);
                   }
                 });
-                console.warn(`[NIMBUS] ✅ Extracted ${this.nameCache.size} units from HTML`);
+                devWarn(`[NIMBUS] ✅ Extracted ${this.nameCache.size} units from HTML`);
                 return;
               }
             } catch (e) {
-              console.warn(`[NIMBUS] Could not parse embedded data`);
+              devWarn(`[NIMBUS] Could not parse embedded data`);
             }
           }
         }
       }
     } catch (e: any) {
-      console.warn(`[NIMBUS] HTML fetch error: ${e.message}`);
+      devWarn(`[NIMBUS] HTML fetch error: ${e.message}`);
     }
 
-    console.warn('[NIMBUS] ❌ Could not fetch unit names from any endpoint');
-    console.warn('[NIMBUS] Will use location-based line estimation');
-    console.warn('[NIMBUS] ========================================');
+    devWarn('[NIMBUS] ❌ Could not fetch unit names from any endpoint');
+    devWarn('[NIMBUS] Will use location-based line estimation');
+    devWarn('[NIMBUS] ========================================');
   }
 
   async connect(): Promise<void> {
@@ -241,24 +245,20 @@ class MqttService {
     this.isConnecting = true;
     this.notifyStatus('connecting');
 
-    console.log('');
-    console.log('🚌 ═══════════════════════════════════════');
-    console.log('🚌 NIMBUS LOCATOR MQTT MODE');
-    console.log('🚌 Topic:', NIMBUS_TOPIC);
-    console.log('🚌 ═══════════════════════════════════════');
-    console.log('');
+    devLog('');
+    devLog('🚌 ═══════════════════════════════════════');
+    devLog('🚌 NIMBUS LOCATOR MQTT MODE');
+    devLog('🚌 Topic:', NIMBUS_TOPIC);
+    devLog('🚌 ═══════════════════════════════════════');
+    devLog('');
 
-    // Token önceliği: locator sayfasındaki public token (bu sistemin asıl/canlı
-    // token'ı orada) -> alınamazsa .env'deki token fallback olarak kullanılır.
-    console.log('[MQTT] Locator public token çekiliyor...');
+    // Token yalnizca locator sayfasindan alinir; env fallback'i native bundle'a
+    // gizli veri gomulmesini onlemek icin bilerek kullanilmiyor.
+    devLog('[MQTT] Locator public token çekiliyor...');
     let token = (await nimbusService.fetchLocatorToken()) || '';
-    if (!token) {
-      console.log('[MQTT] Locator token alınamadı, .env token deneniyor');
-      token = config.flespi.token;
-    }
 
     if (!token) {
-      const message = 'Flespi token alınamadı (locator çekilemedi ve .env boş).';
+      const message = 'Flespi token alınamadı (locator çekilemedi).';
       console.error('[MQTT] ❌', message);
       this.isConnecting = false;
       this.notifyStatus('error', message);
@@ -277,33 +277,34 @@ class MqttService {
       });
 
       this.client.on('connect', () => {
-        console.log('[MQTT] ✅ Connected to Flespi!');
+        devLog('[MQTT] ✅ Connected to Flespi!');
         this.isConnecting = false;
         this.notifyStatus('connected');
 
         // Nimbus topic'e abone ol (PRIMARY)
         this.client.subscribe(NIMBUS_TOPIC, { qos: 0 }, (err: any) => {
           if (err) {
-            console.log('[MQTT] ❌ Subscribe to Nimbus failed:', err.message);
+            devLog('[MQTT] ❌ Subscribe to Nimbus failed:', err.message);
           } else {
-            console.log('[MQTT] ✅ Subscribed to Nimbus:', NIMBUS_TOPIC);
+            devLog('[MQTT] ✅ Subscribed to Nimbus:', NIMBUS_TOPIC);
           }
         });
 
-        // Fallback: Standart Flespi topic'lerine de abone ol (yarım.md görevi)
-        // Bu sayede Nimbus topic değişse bile veri akışı devam eder
-        const fallbackTopics = [
-          'flespi/message/gw/channels/+/+',
-          'flespi/message/gw/devices/+',
-        ];
+        // Prod'da yalnızca Nimbus topic; geniş Flespi fallback abonelikleri dev modunda
+        if (__DEV__) {
+          const fallbackTopics = [
+            'flespi/message/gw/channels/+/+',
+            'flespi/message/gw/devices/+',
+          ];
 
-        fallbackTopics.forEach(topic => {
-          this.client.subscribe(topic, { qos: 0 }, (err: any) => {
-            if (!err) {
-              console.log(`[MQTT] ✅ Subscribed to fallback: ${topic}`);
-            }
+          fallbackTopics.forEach(topic => {
+            this.client.subscribe(topic, { qos: 0 }, (err: any) => {
+              if (!err) {
+                devLog(`[MQTT] ✅ Subscribed to fallback: ${topic}`);
+              }
+            });
           });
-        });
+        }
       });
 
       // Görülen topic'leri takip et
@@ -312,47 +313,53 @@ class MqttService {
       this.client.on('message', (topic: string, message: any) => {
         this.messageCount++;
         const buffer = Buffer.isBuffer(message) ? message : Buffer.from(message);
+
+        if (buffer.length > MAX_MQTT_MESSAGE_BYTES) {
+          devWarn(`[MQTT] Mesaj atlandı: ${buffer.length} byte (limit ${MAX_MQTT_MESSAGE_BYTES})`);
+          return;
+        }
+
         const rawStr = buffer.toString();
 
         // Topic pattern'i kaydet (ID yerine * koy)
         const topicPattern = topic.replace(/\/\d+$/, '/*');
         if (!seenTopics.has(topicPattern)) {
           seenTopics.add(topicPattern);
-          console.warn(`[MQTT] 🆕 New topic pattern: ${topicPattern}`);
-          console.warn(`[MQTT] 🆕 Full topic: ${topic}`);
+          devWarn(`[MQTT] 🆕 New topic pattern: ${topicPattern}`);
+          devWarn(`[MQTT] 🆕 Full topic: ${topic}`);
         }
 
         // İLK 20 MESAJI LOGLA
         if (this.messageCount <= 20) {
-          console.warn(`\n[MSG ${this.messageCount}] ════════════════════`);
-          console.warn(`[MSG ${this.messageCount}] Topic: ${topic}`);
-          console.warn(`[MSG ${this.messageCount}] Size: ${rawStr.length} bytes`);
-          console.warn(`[MSG ${this.messageCount}] Raw: ${rawStr.substring(0, 800)}`);
+          devWarn(`\n[MSG ${this.messageCount}] ════════════════════`);
+          devWarn(`[MSG ${this.messageCount}] Topic: ${topic}`);
+          devWarn(`[MSG ${this.messageCount}] Size: ${rawStr.length} bytes`);
+          devWarn(`[MSG ${this.messageCount}] Raw: ${rawStr.substring(0, 800)}`);
 
           try {
             const parsed = JSON.parse(rawStr);
             const keys = Object.keys(parsed);
-            console.warn(`[MSG ${this.messageCount}] Keys: ${keys.join(', ')}`);
+            devWarn(`[MSG ${this.messageCount}] Keys: ${keys.join(', ')}`);
 
             // TÜM string field'ları logla
             keys.forEach(key => {
               const val = parsed[key];
               if (typeof val === 'string' && val.length > 0) {
-                console.warn(`[MSG ${this.messageCount}] ${key}: "${val}"`);
+                devWarn(`[MSG ${this.messageCount}] ${key}: "${val}"`);
               } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-                console.warn(`[MSG ${this.messageCount}] ${key}: ${JSON.stringify(val).substring(0, 200)}`);
+                devWarn(`[MSG ${this.messageCount}] ${key}: ${JSON.stringify(val).substring(0, 200)}`);
               }
             });
 
             // Özellikle "units" veya benzeri array var mı?
-            if (parsed.units) console.warn(`[MSG ${this.messageCount}] 🎉 HAS units!`);
-            if (parsed.u) console.warn(`[MSG ${this.messageCount}] 🎉 HAS u!`);
-            if (Array.isArray(parsed)) console.warn(`[MSG ${this.messageCount}] 🎉 IS ARRAY with ${parsed.length} items!`);
+            if (parsed.units) devWarn(`[MSG ${this.messageCount}] 🎉 HAS units!`);
+            if (parsed.u) devWarn(`[MSG ${this.messageCount}] 🎉 HAS u!`);
+            if (Array.isArray(parsed)) devWarn(`[MSG ${this.messageCount}] 🎉 IS ARRAY with ${parsed.length} items!`);
 
           } catch (e) {
-            console.warn(`[MSG ${this.messageCount}] Not JSON, raw bytes`);
+            devWarn(`[MSG ${this.messageCount}] Not JSON, raw bytes`);
           }
-          console.warn(`[MSG ${this.messageCount}] ════════════════════\n`);
+          devWarn(`[MSG ${this.messageCount}] ════════════════════\n`);
         }
 
         this.handleMessage(topic, buffer);
@@ -365,7 +372,7 @@ class MqttService {
       });
 
       this.client.on('offline', () => {
-        console.log('[MQTT] 🔴 Offline');
+        devLog('[MQTT] 🔴 Offline');
         this.notifyStatus('disconnected');
       });
 
@@ -382,8 +389,8 @@ class MqttService {
       const knownLines = [...new Set(vehicles.map(v => v.line))];
       const nonUnknown = knownLines.filter(l => l !== 'Unknown');
       const unknownCount = vehicles.filter(v => v.line === 'Unknown').length;
-      console.warn(`[MQTT] 📊 ${this.messageCount} msgs, ${this.vehicleMap.size} vehicles (${unknownCount} unknown)`);
-      console.warn(`[MQTT] 📋 Lines (${nonUnknown.length}): ${nonUnknown.length > 0 ? nonUnknown.slice(0, 15).join(', ') : 'ALL UNKNOWN!'}`);
+      devWarn(`[MQTT] 📊 ${this.messageCount} msgs, ${this.vehicleMap.size} vehicles (${unknownCount} unknown)`);
+      devWarn(`[MQTT] 📋 Lines (${nonUnknown.length}): ${nonUnknown.length > 0 ? nonUnknown.slice(0, 15).join(', ') : 'ALL UNKNOWN!'}`);
     }
 
     try {
@@ -392,7 +399,7 @@ class MqttService {
       // Array mi? (Batch message)
       if (Array.isArray(parsed)) {
         if (this.messageCount <= 5) {
-          console.warn(`[MQTT] 📦 Array message with ${parsed.length} items`);
+          devWarn(`[MQTT] 📦 Array message with ${parsed.length} items`);
         }
         parsed.forEach(item => this.processUnit(item, topic));
         return;
@@ -400,13 +407,13 @@ class MqttService {
 
       // units objesi var mı? (Nimbus init response)
       if (parsed.units && Array.isArray(parsed.units)) {
-        console.warn(`[MQTT] 📦 Units batch: ${parsed.units.length} units`);
+        devWarn(`[MQTT] 📦 Units batch: ${parsed.units.length} units`);
         parsed.units.forEach((unit: any) => {
           // İsimleri cache'le
           if (unit.id && unit.nm) {
             this.nameCache.set(String(unit.id), unit.nm);
             if (this.nameCache.size <= 10) {
-              console.warn(`[NAME CACHE] ${unit.id} -> "${unit.nm}"`);
+              devWarn(`[NAME CACHE] ${unit.id} -> "${unit.nm}"`);
             }
           }
           this.processUnit(unit, topic);
@@ -419,7 +426,7 @@ class MqttService {
 
     } catch (e) {
       if (this.messageCount <= 5) {
-        console.warn(`[MQTT] Parse error at msg ${this.messageCount}:`, e);
+        devWarn(`[MQTT] Parse error at msg ${this.messageCount}:`, e);
       }
     }
   }
@@ -440,17 +447,17 @@ class MqttService {
 
     // Discovery Mode Log (yarım.md): İlk kez görülen cihazları logla
     if (!this.vehicleMap.has(idStr)) {
-      console.log(`[MQTT] 🆕 NEW DEVICE: ${idStr} on topic: ${topic}`);
+      devLog(`[MQTT] 🆕 NEW DEVICE: ${idStr} on topic: ${topic}`);
       if (this.vehicleMap.size < 10) {
-        console.log(`[MQTT]    Data keys: ${Object.keys(data).join(', ')}`);
-        console.log(`[MQTT]    Sample: ${JSON.stringify(data).substring(0, 200)}`);
+        devLog(`[MQTT]    Data keys: ${Object.keys(data).join(', ')}`);
+        devLog(`[MQTT]    Sample: ${JSON.stringify(data).substring(0, 200)}`);
       }
     }
 
     // 🔍 DEBUG: 600200571 (23 numaralı hat) özel takip
     if (idStr === '600200571') {
-      console.warn(`\n🚌🚌🚌 BUS 23 (ID: 600200571) UPDATE 🚌🚌🚌`);
-      console.warn(`Data: ${JSON.stringify(data).substring(0, 500)}`);
+      devWarn(`\n🚌🚌🚌 BUS 23 (ID: 600200571) UPDATE 🚌🚌🚌`);
+      devWarn(`Data: ${JSON.stringify(data).substring(0, 500)}`);
     }
 
     // İsim var mı? Varsa cache'le
@@ -521,15 +528,15 @@ class MqttService {
 
     // Debug: İlk 30 araç için route ID'yi logla
     if (this.vehicleMap.size < 30 && !this.vehicleMap.has(idStr)) {
-      console.warn(`[MQTT] 🔍 Device ${idStr}: data.r=${data.r}, data.msg?.r=${data.msg?.r}, routeId=${routeId}`);
+      devWarn(`[MQTT] 🔍 Device ${idStr}: data.r=${data.r}, data.msg?.r=${data.msg?.r}, routeId=${routeId}`);
     }
 
     if (routeId) {
       line = this.getLineFromRouteId(routeId);
       if (line && this.vehicleMap.size < 30 && !this.vehicleMap.has(idStr)) {
-        console.warn(`[MQTT] ✅ Route ID ${routeId} -> Hat ${line}`);
+        devWarn(`[MQTT] ✅ Route ID ${routeId} -> Hat ${line}`);
       } else if (!line && this.vehicleMap.size < 30 && !this.vehicleMap.has(idStr)) {
-        console.warn(`[MQTT] ❌ Route ID ${routeId} mapping'de YOK!`);
+        devWarn(`[MQTT] ❌ Route ID ${routeId} mapping'de YOK!`);
       }
     }
 
@@ -554,12 +561,12 @@ class MqttService {
 
     // Debug: Hala bulunamadıysa
     if (!line && this.vehicleMap.size < 30 && !this.vehicleMap.has(idStr)) {
-      console.warn(`[MQTT] ⚠️ Hat bulunamadı: id=${idStr}, routeId=${routeId || 'N/A'}, name="${name}"`);
+      devWarn(`[MQTT] ⚠️ Hat bulunamadı: id=${idStr}, routeId=${routeId || 'N/A'}, name="${name}"`);
     }
 
     // İLK 20 yeni araç için detaylı log
     if (this.vehicleMap.size < 20 && !this.vehicleMap.has(idStr)) {
-      console.warn(`[NEW] id=${id}, name="${name}", line="${line || 'Unknown'}", pos=(${lat.toFixed(4)},${lon.toFixed(4)})`);
+      devWarn(`[NEW] id=${id}, name="${name}", line="${line || 'Unknown'}", pos=(${lat.toFixed(4)},${lon.toFixed(4)})`);
     }
 
     const position: BusPosition = {

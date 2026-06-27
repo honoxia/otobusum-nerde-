@@ -1,6 +1,7 @@
 import { BusStop, Coordinates, NearestStopResult } from '../../types/shared-types';
 import { calculateHaversineDistance } from '../../utils/geo.utils';
 import stopsData from '../../data/stops-data.json';
+import { devLog } from '../../utils/devLog';
 
 // App sabitleri
 const MAX_NEARBY_STOP_DISTANCE = 1000; // metre
@@ -21,7 +22,7 @@ class StopService {
   private loadStops(): void {
     try {
       this.stops = stopsData as BusStop[];
-      console.log(`[StopService] ${this.stops.length} durak yüklendi`);
+      devLog(`[StopService] ${this.stops.length} durak yüklendi`);
     } catch (error) {
       console.error('[StopService] Durak verileri yüklenemedi:', error);
       this.stops = [];
@@ -97,7 +98,7 @@ class StopService {
     if (line) {
       stops = this.getStopsByLine(line);
       if (stops.length === 0) {
-        console.log(`[StopService] "${line}" hattı için durak bulunamadı`);
+        devLog(`[StopService] "${line}" hattı için durak bulunamadı`);
         return {
           stop: null,
           distance: Infinity,
@@ -118,7 +119,7 @@ class StopService {
       .sort((a, b) => a.distance - b.distance);
 
     if (stopsWithDistance.length === 0) {
-      console.log(
+      devLog(
         `[StopService] ${maxDistance}m mesafe içinde durak bulunamadı`
       );
       return {
@@ -129,7 +130,7 @@ class StopService {
     }
 
     const nearest = stopsWithDistance[0];
-    console.log(
+    devLog(
       `[StopService] En yakın durak: ${nearest.stop.name} (${Math.round(nearest.distance)}m)`
     );
 

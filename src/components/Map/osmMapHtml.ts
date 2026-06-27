@@ -82,6 +82,16 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       var userLayer = L.layerGroup().addTo(map);
       var hasZoomedToUser = false;
 
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
       function renderUser(userLocation) {
         userLayer.clearLayers();
         if (!userLocation) return;
@@ -112,7 +122,7 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
             fillColor: isNearest ? CONFIG.colors.NEAREST_STOP : CONFIG.colors.STOP,
             fillOpacity: 1
           });
-          marker.bindTooltip(stop.name, { direction: 'top' });
+          marker.bindTooltip(escapeHtml(stop.name), { direction: 'top' });
           (function (stopId) {
             marker.on('click', function () {
               post({ type: 'stopPress', stopId: stopId });
@@ -130,7 +140,7 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
           if (!bus.line || bus.line === 'Unknown') continue;
           var icon = L.divIcon({
             className: '',
-            html: '<div class="bus-marker">' + bus.line + '</div>',
+            html: '<div class="bus-marker">' + escapeHtml(bus.line) + '</div>',
             iconSize: null
           });
           var marker = L.marker([bus.coordinates.latitude, bus.coordinates.longitude], { icon: icon });

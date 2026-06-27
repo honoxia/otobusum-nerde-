@@ -70,9 +70,8 @@ cp .env.example .env
 # Google Maps (Android build icin zorunlu)
 EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
 
-# Flespi MQTT (otobus konumlari icin)
-FLESPI_TOKEN=your_flespi_token
-FLESPI_CHANNEL_ID=your_channel_id
+# Flespi MQTT token'i uygulama icine gomulmez.
+# Canli public token Nimbus locator sayfasindan calisma aninda cekilir.
 
 # Nimbus (opsiyonel - tarifeli zamanlar icin)
 NIMBUS_LOCATOR_HASH=your_hash
@@ -131,4 +130,3 @@ Uygulama su adimlari izler:
 ## Lisans
 
 MIT
-

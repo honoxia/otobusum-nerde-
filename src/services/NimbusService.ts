@@ -1,5 +1,6 @@
 import { config } from '../config';
 import routeService from './routes/RouteService';
+import { devLog } from '../utils/devLog';
 
 interface NimbusETA {
   uid: number | null;  // Araç ID (varsa)
@@ -70,7 +71,7 @@ class NimbusService {
         console.error('[NimbusService] flespi_token APP_CONFIG içinde yok');
         return null;
       }
-      console.log('[NimbusService] ✅ Public Flespi token locator sayfasından alındı');
+      devLog('[NimbusService] ✅ Public Flespi token locator sayfasından alındı');
       return token;
     } catch (error) {
       console.error('[NimbusService] Token çekme hatası:', error);
@@ -85,7 +86,7 @@ class NimbusService {
   async getStopArrivals(stopWialonId: number): Promise<StopArrival[]> {
     try {
       const url = `${this.baseUrl}/${this.locatorHash}/online/stop/${stopWialonId}`;
-      console.log(`[NimbusService] Fetching arrivals for stop ${stopWialonId}`);
+      devLog(`[NimbusService] Fetching arrivals for stop ${stopWialonId}`);
 
       const response = await fetch(url);
 
@@ -103,7 +104,7 @@ class NimbusService {
         const routeInfo = routeService.getRouteInfo(route.id);
 
         if (!routeInfo) {
-          console.log(`[NimbusService] Unknown route ID: ${route.id}`);
+          devLog(`[NimbusService] Unknown route ID: ${route.id}`);
           continue;
         }
 
@@ -131,7 +132,7 @@ class NimbusService {
       // ETA'ya göre sırala
       arrivals.sort((a, b) => a.etaSeconds - b.etaSeconds);
 
-      console.log(`[NimbusService] Found ${arrivals.length} arrivals for stop ${stopWialonId}`);
+      devLog(`[NimbusService] Found ${arrivals.length} arrivals for stop ${stopWialonId}`);
       return arrivals;
 
     } catch (error) {

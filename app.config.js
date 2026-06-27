@@ -17,7 +17,8 @@ export default {
     ios: {
       supportsTablet: true,
       infoPlist: {
-        NSLocationWhenInUseUsageDescription: "Konumunuz en yakın durağı bulmak için kullanılır."
+        NSLocationWhenInUseUsageDescription: "Konumunuz en yakın durağı bulmak için kullanılır.",
+        NSMicrophoneUsageDescription: "Hat numarası söyleyerek arama yapmak için mikrofon kullanılır."
       }
     },
     android: {
@@ -28,10 +29,11 @@ export default {
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       package: "com.honoxia.otobusumnerde",
-      usesCleartextTraffic: true,
+      usesCleartextTraffic: false,
       permissions: [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO"
       ],
       config: {
         googleMaps: {
@@ -46,8 +48,6 @@ export default {
       eas: {
         projectId: "6706d3a3-1f40-4f73-8272-48f983ed8d92"
       },
-      FLESPI_TOKEN: process.env.FLESPI_TOKEN || process.env.EXPO_PUBLIC_FLESPI_TOKEN || "",
-      EXPO_PUBLIC_FLESPI_TOKEN: process.env.EXPO_PUBLIC_FLESPI_TOKEN || process.env.FLESPI_TOKEN || "",
       FLESPI_CHANNEL_ID: process.env.FLESPI_CHANNEL_ID || "",
       FLESPI_DEVICE_IDS: process.env.FLESPI_DEVICE_IDS || "",
       NIMBUS_LOCATOR_HASH: process.env.NIMBUS_LOCATOR_HASH || "",

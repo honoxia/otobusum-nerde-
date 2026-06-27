@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Coordinates } from '../types/shared-types';
 import LocationService from '../services/LocationService';
+import { devLog } from '../utils/devLog';
 
 // Eskişehir merkezi - Emülatör için fallback konum
 const DEFAULT_LOCATION: Coordinates = {
@@ -32,7 +33,7 @@ export const useLocation = (): UseLocationReturn => {
       const granted = await LocationService.requestPermission();
       if (!granted) {
         // İzin verilmedi - varsayılan konumu kullan
-        console.log('[useLocation] İzin verilmedi, varsayılan konum kullanılıyor');
+        devLog('[useLocation] İzin verilmedi, varsayılan konum kullanılıyor');
         setLocation(DEFAULT_LOCATION);
         setError('Konum izni verilmedi (varsayılan konum kullanılıyor)');
         setIsLoading(false);
@@ -43,7 +44,7 @@ export const useLocation = (): UseLocationReturn => {
       setLocation(coords);
     } catch (err: any) {
       // Konum alınamadı - varsayılan konumu kullan (emülatör desteği)
-      console.log('[useLocation] Konum alınamadı, varsayılan konum kullanılıyor:', err.message);
+      devLog('[useLocation] Konum alınamadı, varsayılan konum kullanılıyor:', err.message);
       setLocation(DEFAULT_LOCATION);
       setError('Konum alınamadı (varsayılan konum kullanılıyor)');
     } finally {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { BusPosition } from '../types/shared-types';
 import mqttService from '../services/mqtt/MqttService';
 import { config } from '../config';
+import { devLog } from '../utils/devLog';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -70,7 +71,7 @@ export function useLiveVehicles(lines?: string[]): UseLiveVehiclesResult {
       }
 
       if (removed > 0) {
-        console.log(`[useLiveVehicles] Removed ${removed} stale vehicles`);
+        devLog(`[useLiveVehicles] Removed ${removed} stale vehicles`);
       }
 
       return next;

@@ -31,6 +31,7 @@ import etaService from './src/services/ETAService';
 import { extractLineNumber } from './src/utils/queryParser';
 import { ETAResult, BusStop } from './src/types/shared-types';
 import { calculateHaversineDistance } from './src/utils/geo.utils';
+import { devLog } from './src/utils/devLog';
 import { Buffer } from 'buffer';
 global.Buffer = Buffer;
 
@@ -70,17 +71,17 @@ function AppContent() {
   // Sadece 500m çaptaki durakları göster (performans için)
   const nearbyStops = React.useMemo(() => {
     if (!location || !allStops.length) {
-      console.log('[APP] nearbyStops: No location or stops', { location: !!location, stopsCount: allStops.length });
+      devLog('[APP] nearbyStops: No location or stops', { location: !!location, stopsCount: allStops.length });
       return [];
     }
     const nearby = allStops.filter(stop => {
       const dist = calculateHaversineDistance(location, stop.coordinates);
       return dist <= 1000; // 1000 metre (test için artırıldı)
     });
-    console.log(`[APP] 📍 nearbyStops: ${nearby.length} durak (1000m içinde), toplam: ${allStops.length}`);
+    devLog(`[APP] 📍 nearbyStops: ${nearby.length} durak (1000m içinde), toplam: ${allStops.length}`);
     // İlk 3 durağı logla
     nearby.slice(0, 3).forEach(s => {
-      console.log(`[APP]    - ${s.name} (${s.lines.join(', ')})`);
+      devLog(`[APP]    - ${s.name} (${s.lines.join(', ')})`);
     });
     return nearby;
   }, [location, allStops]);
@@ -101,7 +102,7 @@ function AppContent() {
       Voice.onSpeechError = () => setIsListening(false);
       Voice.onSpeechEnd = () => setIsListening(false);
     } catch {
-      console.log('Voice setup failed');
+      if (__DEV__) console.log('Voice setup failed');
     }
 
     return () => {

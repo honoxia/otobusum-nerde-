@@ -6,6 +6,7 @@ import { MAP_CONFIG } from '../../utils/constants';
 import { StopMarker } from './StopMarker';
 import { UserMarker } from './UserMarker';
 import { BusMarker } from './BusMarker';
+import { devLog } from '../../utils/devLog';
 
 interface GoogleMapViewProps {
   userLocation: Coordinates | null;
@@ -33,13 +34,13 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
   const [hasZoomedToUser, setHasZoomedToUser] = useState(false);
 
   const handleMapReady = () => {
-    console.log('[MAP] Map is ready');
+    devLog('[MAP] Map is ready');
     setIsMapReady(true);
   };
 
   useEffect(() => {
     if (isMapReady && mapRef.current && userLocation && !hasZoomedToUser) {
-      console.log('[MAP] Zooming to user location:', userLocation);
+      devLog('[MAP] Zooming to user location:', userLocation);
       setTimeout(() => {
         mapRef.current?.animateToRegion(
           {
@@ -56,7 +57,7 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
   }, [isMapReady, userLocation, hasZoomedToUser]);
 
   useEffect(() => {
-    console.log(`[MAP] Rendering ${stops.length} stops, ${buses.length} buses`);
+    devLog(`[MAP] Rendering ${stops.length} stops, ${buses.length} buses`);
   }, [stops.length, buses.length]);
 
   return (

@@ -61,7 +61,7 @@ export const OsmMapView: React.FC<OsmMapViewProps> = ({
           const bus = buses.find((b) => b.deviceId === msg.deviceId);
           if (bus) onBusPress?.(bus);
         } else if (msg.type === 'error') {
-          console.warn('[OSM]', msg.message);
+          if (__DEV__) console.warn('[OSM]', msg.message);
         }
       } catch {
         // sessiz geç
@@ -71,22 +71,28 @@ export const OsmMapView: React.FC<OsmMapViewProps> = ({
   );
 
   const handleError = useCallback(() => {
-    console.warn('[OSM] WebView yüklenemedi, liste moduna düşülüyor');
+    if (__DEV__) console.warn('[OSM] WebView yüklenemedi, liste moduna düşülüyor');
     onError?.();
   }, [onError]);
+
+  const handleShouldStartLoad = useCallback((request: { url: string }) => {
+    return request.url === 'about:blank' || request.url.startsWith('about:');
+  }, []);
 
   return (
     <WebView
       ref={webViewRef}
       style={styles.webview}
-      originWhitelist={['*']}
+      originWhitelist={['about:blank']}
       source={{ html }}
       javaScriptEnabled
-      domStorageEnabled
+      domStorageEnabled={false}
+      allowFileAccess={false}
+      mixedContentMode="never"
+      onShouldStartLoadWithRequest={handleShouldStartLoad}
       onMessage={handleMessage}
       onError={handleError}
       onHttpError={handleError}
-      // Android'de donanım hızlandırma ve performans
       androidLayerType="hardware"
     />
   );

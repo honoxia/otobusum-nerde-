@@ -1,6 +1,7 @@
 import { Coordinates } from '../../types/shared-types';
 import { calculateHaversineDistance } from '../../utils/geo.utils';
 import routesData from '../../data/routes-data.json';
+import { devLog } from '../../utils/devLog';
 
 interface RouteDirection {
   routeId: number;
@@ -58,7 +59,7 @@ class RouteService {
         });
       });
 
-      console.log(`[RouteService] ${data.length} hat, ${this.stopRouteMap.size} durak-route eşleştirmesi yüklendi`);
+      devLog(`[RouteService] ${data.length} hat, ${this.stopRouteMap.size} durak-route eşleştirmesi yüklendi`);
     } catch (error) {
       console.error('[RouteService] Route verileri yüklenemedi:', error);
     }

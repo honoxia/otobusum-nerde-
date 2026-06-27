@@ -3,6 +3,7 @@ import { calculateHaversineDistance } from '../utils/geo.utils';
 import stopService from './stops/StopService';
 import routeService from './routes/RouteService';
 import nimbusService from './NimbusService';
+import { devLog } from '../utils/devLog';
 import { config } from '../config';
 
 const DEFAULT_BUS_SPEED_KMH = config.app.defaultBusSpeedKmh;
@@ -69,17 +70,17 @@ class ETAService {
     line: string,
     vehicles: BusPosition[]
   ): ETAResult {
-    console.log('');
-    console.log('🔍 ═══ ETA DEBUG (DURAK BAZLI) ═══');
-    console.log(`🔍 Sorgulanan hat: "${line}"`);
-    console.log(`🔍 Toplam araç sayısı: ${vehicles.length}`);
+    devLog('');
+    devLog('🔍 ═══ ETA DEBUG (DURAK BAZLI) ═══');
+    devLog(`🔍 Sorgulanan hat: "${line}"`);
+    devLog(`🔍 Toplam araç sayısı: ${vehicles.length}`);
 
     // 1. Kullanıcının EN YAKIN DURAĞINI bul (hat filtresi YOK)
     const nearestStopResult = stopService.findNearestStop(userLocation);
 
     if (!nearestStopResult.stop) {
-      console.log('🔍 ❌ Yakında durak bulunamadı');
-      console.log('🔍 ═══════════════');
+      devLog('🔍 ❌ Yakında durak bulunamadı');
+      devLog('🔍 ═══════════════');
       return {
         status: 'no_nearby_stop',
         line,
@@ -88,17 +89,17 @@ class ETAService {
     }
 
     const targetStop = nearestStopResult.stop;
-    console.log(`🔍 📍 En yakın durak: ${targetStop.name} (${Math.round(nearestStopResult.distance)}m)`);
-    console.log(`🔍 📍 Duraktan geçen hatlar: ${targetStop.lines.join(', ')}`);
+    devLog(`🔍 📍 En yakın durak: ${targetStop.name} (${Math.round(nearestStopResult.distance)}m)`);
+    devLog(`🔍 📍 Duraktan geçen hatlar: ${targetStop.lines.join(', ')}`);
 
     // 2. Sorgulanan hat bu duraktan geçiyor mu?
     const matchingLines = this.findMatchingLinesAtStop(line, targetStop.lines);
-    console.log(`🔍 🔎 "${line}" ile eşleşen hatlar: ${matchingLines.length > 0 ? matchingLines.join(', ') : 'YOK'}`);
+    devLog(`🔍 🔎 "${line}" ile eşleşen hatlar: ${matchingLines.length > 0 ? matchingLines.join(', ') : 'YOK'}`);
 
     if (matchingLines.length === 0) {
       // Bu hat bu duraktan geçmiyor
-      console.log(`🔍 ❌ "${line}" hattı "${targetStop.name}" durağından GEÇMİYOR`);
-      console.log('🔍 ═══════════════');
+      devLog(`🔍 ❌ "${line}" hattı "${targetStop.name}" durağından GEÇMİYOR`);
+      devLog('🔍 ═══════════════');
       return {
         status: 'no_nearby_stop',
         line,
@@ -119,7 +120,7 @@ class ETAService {
              ((/^\d+$/.test(normalizedQuery)) && vehicleLine.startsWith(normalizedQuery));
     });
 
-    console.log(`🔍 🚌 "${line}" hattında araç sayısı: ${lineVehicles.length}`);
+    devLog(`🔍 🚌 "${line}" hattında araç sayısı: ${lineVehicles.length}`);
 
     if (lineVehicles.length === 0) {
       // Hat geçiyor ama şu an aktif araç yok
@@ -129,9 +130,9 @@ class ETAService {
         normalizedQuery.startsWith(l.toUpperCase().replace(/[A-Z]$/, ''))
       );
       if (similar.length > 0) {
-        console.log(`🔍 💡 Sistemde görünen benzer hatlar: ${similar.join(', ')}`);
+        devLog(`🔍 💡 Sistemde görünen benzer hatlar: ${similar.join(', ')}`);
       }
-      console.log('🔍 ═══════════════');
+      devLog('🔍 ═══════════════');
 
       return {
         status: 'no_vehicle_approaching',
@@ -173,7 +174,7 @@ class ETAService {
           );
 
           if (!willStopHere) {
-            console.log(`🔍 ⚠️ Araç ${vehicle.line} (Route ${vehicle.routeId}) bu durağa UĞRAMAYACAK`);
+            devLog(`🔍 ⚠️ Araç ${vehicle.line} (Route ${vehicle.routeId}) bu durağa UĞRAMAYACAK`);
           }
         }
 
@@ -196,10 +197,10 @@ class ETAService {
         return a.distanceToStop - b.distanceToStop;
       });
 
-    console.log(`🔍 🚌 Bu durağa uğrayacak araç sayısı: ${vehiclesWithDistance.length}/${lineVehicles.length}`);
+    devLog(`🔍 🚌 Bu durağa uğrayacak araç sayısı: ${vehiclesWithDistance.length}/${lineVehicles.length}`);
 
     if (vehiclesWithDistance.length === 0) {
-      console.log('🔍 ═══════════════');
+      devLog('🔍 ═══════════════');
       return {
         status: 'no_vehicle_approaching',
         line,
@@ -213,13 +214,13 @@ class ETAService {
     const approachingVehicles = vehiclesWithDistance.filter(v => v.isApproaching);
     const nearest = approachingVehicles.length > 0 ? approachingVehicles[0] : vehiclesWithDistance[0];
 
-    console.log(`🔍 🚌 En yakın araç: ${nearest.vehicle.line} (ID: ${nearest.vehicle.deviceId}) - ${Math.round(nearest.distanceToStop)}m`);
-    console.log(`🔍 🚌 Yaklaşıyor mu: ${nearest.isApproaching ? 'EVET ✅' : 'HAYIR ❌ (ters yönde)'}`);
-    console.log(`🔍 🚌 Yaklaşan araç sayısı: ${approachingVehicles.length}/${vehiclesWithDistance.length}`);
+    devLog(`🔍 🚌 En yakın araç: ${nearest.vehicle.line} (ID: ${nearest.vehicle.deviceId}) - ${Math.round(nearest.distanceToStop)}m`);
+    devLog(`🔍 🚌 Yaklaşıyor mu: ${nearest.isApproaching ? 'EVET ✅' : 'HAYIR ❌ (ters yönde)'}`);
+    devLog(`🔍 🚌 Yaklaşan araç sayısı: ${approachingVehicles.length}/${vehiclesWithDistance.length}`);
 
     // Eğer hiç yaklaşan araç yoksa
     if (!nearest.isApproaching) {
-      console.log('🔍 ═══════════════');
+      devLog('🔍 ═══════════════');
       return {
         status: 'no_vehicle_approaching',
         line,
@@ -277,13 +278,13 @@ class ETAService {
         stopsBetween = stopsCount;
         const stopDelayTotal = stopsBetween * STOP_DELAY_SECONDS;
         etaSeconds += stopDelayTotal;
-        console.log(`🔍 🚏 Aradaki durak sayısı: ${stopsBetween} (+${stopDelayTotal} sn)`);
+        devLog(`🔍 🚏 Aradaki durak sayısı: ${stopsBetween} (+${stopDelayTotal} sn)`);
       }
     }
 
     const etaMinutes = Math.round(etaSeconds / 60);
 
-    console.log(`🔍 ⏱️ Hız: ${speedKmh} km/h (stabil), Mesafe: ${Math.round(effectiveDistance)}m (${distanceSource}), ETA: ${etaMinutes} dk`);
+    devLog(`🔍 ⏱️ Hız: ${speedKmh} km/h (stabil), Mesafe: ${Math.round(effectiveDistance)}m (${distanceSource}), ETA: ${etaMinutes} dk`);
 
     if (etaMinutes > 30) {
       return {
@@ -305,7 +306,7 @@ class ETAService {
       if (routeInfo) {
         directionFull = routeInfo.direction;
         direction = routeService.formatDirection(routeInfo.direction);
-        console.log(`🔍 🧭 Yön (Route ID ${nearest.vehicle.routeId}): ${direction}`);
+        devLog(`🔍 🧭 Yön (Route ID ${nearest.vehicle.routeId}): ${direction}`);
       }
     }
 
@@ -322,12 +323,12 @@ class ETAService {
         if (directionResult) {
           directionFull = directionResult.direction;
           direction = routeService.formatDirection(directionResult.direction);
-          console.log(`🔍 🧭 Yön (durak bazlı): ${direction} (${directionResult.confidence})`);
+          devLog(`🔍 🧭 Yön (durak bazlı): ${direction} (${directionResult.confidence})`);
         }
       }
     }
 
-    console.log('🔍 ═══════════════');
+    devLog('🔍 ═══════════════');
 
     return {
       status: 'ok',
@@ -446,12 +447,12 @@ class ETAService {
       const stopWialonId = this.extractWialonId(localResult.stopId);
 
       if (stopWialonId) {
-        console.log(`🔍 📅 Nimbus ETA (birincil) çekiliyor...`);
+        devLog(`🔍 📅 Nimbus ETA (birincil) çekiliyor...`);
         const scheduledArrivals = await this.getScheduledArrivals(stopWialonId, line);
 
         if (scheduledArrivals.length > 0) {
           const primary = scheduledArrivals[0]; // en yakın varış
-          console.log(
+          devLog(
             `🔍 ✅ Nimbus birincil ETA: ${primary.line} ${primary.direction} → ${primary.etaMinutes} dk`
           );
 
@@ -466,7 +467,7 @@ class ETAService {
           };
         }
 
-        console.log('🔍 ⚠️ Nimbus ETA vermedi, bizim rota-bazlı hesap kullanılıyor');
+        devLog('🔍 ⚠️ Nimbus ETA vermedi, bizim rota-bazlı hesap kullanılıyor');
       }
     }
 

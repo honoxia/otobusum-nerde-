@@ -4,6 +4,7 @@ import { Coordinates, BusStop, BusPosition } from '../../types/shared-types';
 import { config } from '../../config';
 import { GoogleMapView } from './GoogleMapView';
 import { OsmMapView } from './OsmMapView';
+import { devLog } from '../../utils/devLog';
 
 interface MapContainerProps {
   userLocation: Coordinates | null;
@@ -33,7 +34,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   const [osmFailed, setOsmFailed] = useState(false);
 
   useEffect(() => {
-    console.log(
+    devLog(
       `[MAP] provider=${provider} useGoogle=${useGoogle} | ${stops.length} stops, ${buses.length} buses`
     );
   }, [provider, useGoogle, stops.length, buses.length]);

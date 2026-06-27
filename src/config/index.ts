@@ -1,19 +1,10 @@
 import Constants from 'expo-constants';
 
-// Environment variables from .env file (via expo-constants)
 const extra = Constants.expoConfig?.extra || {};
-
-const cleanString = (value: unknown): string =>
-  typeof value === 'string' ? value.trim() : '';
 
 export const config = {
   flespi: {
-    token: cleanString(
-      extra.FLESPI_TOKEN ||
-        extra.EXPO_PUBLIC_FLESPI_TOKEN ||
-        process.env.FLESPI_TOKEN ||
-        process.env.EXPO_PUBLIC_FLESPI_TOKEN
-    ),
+    token: '',
     channelId: extra.FLESPI_CHANNEL_ID || process.env.FLESPI_CHANNEL_ID || '',
     deviceIds: (extra.FLESPI_DEVICE_IDS || process.env.FLESPI_DEVICE_IDS || '')
       .split(',')
