@@ -1,4 +1,5 @@
 import { Coordinates } from '../../types/shared-types';
+import { calculateHaversineDistance } from '../../utils/geo.utils';
 import routesData from '../../data/routes-data.json';
 
 interface RouteDirection {
@@ -339,6 +340,57 @@ class RouteService {
     }
 
     return nearestStopId;
+  }
+
+  /**
+   * Rota üzerinden iki durak arasındaki GERÇEK yol mesafesini hesaplar.
+   * Kuş uçuşu yerine, rotadaki ardışık duraklar arası mesafeleri toplar.
+   *
+   * @param routeId Rota ID'si
+   * @param fromStopId Başlangıç durağı (aracın en yakın olduğu durak)
+   * @param toStopId Hedef durak
+   * @param stopsData stopId -> Coordinates haritası
+   * @returns Metre cinsinden rota mesafesi, hesaplanamazsa null
+   */
+  getRouteDistanceMeters(
+    routeId: number,
+    fromStopId: number,
+    toStopId: number,
+    stopsData: Map<number, Coordinates>
+  ): number | null {
+    const stops = this.getRouteStops(routeId);
+    if (!stops) return null;
+
+    const fromIndex = stops.indexOf(fromStopId);
+    const toIndex = stops.indexOf(toStopId);
+
+    // Her iki durak da rotada olmalı ve araç hedeften önce gelmeli
+    if (fromIndex === -1 || toIndex === -1 || fromIndex > toIndex) {
+      return null;
+    }
+
+    let totalMeters = 0;
+    let missingSegments = 0;
+    const segmentCount = toIndex - fromIndex;
+
+    for (let i = fromIndex; i < toIndex; i++) {
+      const a = stopsData.get(stops[i]);
+      const b = stopsData.get(stops[i + 1]);
+      if (a && b) {
+        totalMeters += calculateHaversineDistance(a, b);
+      } else {
+        // Koordinatı eksik durak: segment atlanırsa mesafe olduğundan kısa çıkar
+        missingSegments++;
+      }
+    }
+
+    // Segmentlerin %20'sinden fazlası ölçülemiyorsa mesafe güvenilmez sayılır;
+    // null dönüp çağıran tarafın kuşuçuşu fallback'ine düşmesini sağla.
+    if (segmentCount > 0 && missingSegments / segmentCount > 0.2) {
+      return null;
+    }
+
+    return totalMeters;
   }
 
   /**

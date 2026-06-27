@@ -229,20 +229,43 @@ class ETAService {
       };
     }
 
-    // 5. ETA hesapla (rota bazlı durak sayısı ile)
-    const speedKmh = nearest.vehicle.speed && nearest.vehicle.speed > 0
-      ? nearest.vehicle.speed
-      : DEFAULT_BUS_SPEED_KMH;
-
-    // Mesafe düzeltmesi (kuş uçuşu -> gerçek yol)
-    const correctedDistance = nearest.distanceToStop * ROAD_DISTANCE_FACTOR;
-
+    // 5. ETA hesapla — rota üzerinden mesafe + STABİL hız
+    // Anlık MQTT hızı çok dalgalı (araç durakta/ışıkta yavaşlayınca ETA zıplıyordu),
+    // bu yüzden stabil bir ortalama seyir hızı kullanılır.
+    const speedKmh = DEFAULT_BUS_SPEED_KMH;
     const speedMs = (speedKmh * 1000) / 3600;
-    let etaSeconds = correctedDistance / speedMs;
 
-    // Rota bazlı durak gecikmesi hesapla (targetWialonId ve vehicleNearestStopId zaten yukarıda hesaplandı)
+    // Mesafe: mümkünse rota üzerinden (duraktan durağa), değilse kuş uçuşu x1.25
+    const routeDistance =
+      nearest.vehicle.routeId && targetWialonId && nearest.vehicleNearestStopId
+        ? routeService.getRouteDistanceMeters(
+            nearest.vehicle.routeId,
+            nearest.vehicleNearestStopId,
+            targetWialonId,
+            stopsCoordMap
+          )
+        : null;
+
+    let effectiveDistance: number;
+    let distanceSource: string;
+
+    if (routeDistance !== null) {
+      // Aracın, rotadaki en yakın durağa olan kısa giriş mesafesini de ekle
+      const firstStopCoords = stopsCoordMap.get(nearest.vehicleNearestStopId!);
+      const leadIn = firstStopCoords
+        ? calculateHaversineDistance(nearest.vehicle.coordinates, firstStopCoords)
+        : 0;
+      effectiveDistance = routeDistance + leadIn;
+      distanceSource = 'rota';
+    } else {
+      effectiveDistance = nearest.distanceToStop * ROAD_DISTANCE_FACTOR;
+      distanceSource = `kuşuçuşu x${ROAD_DISTANCE_FACTOR}`;
+    }
+
+    let etaSeconds = effectiveDistance / speedMs;
+
+    // Aradaki duraklarda bekleme süresi
     let stopsBetween = 0;
-
     if (nearest.vehicle.routeId && targetWialonId && nearest.vehicleNearestStopId) {
       const stopsCount = routeService.getStopsBetween(
         nearest.vehicle.routeId,
@@ -260,7 +283,7 @@ class ETAService {
 
     const etaMinutes = Math.round(etaSeconds / 60);
 
-    console.log(`🔍 ⏱️ Hız: ${speedKmh} km/h, Mesafe: ${Math.round(correctedDistance)}m (x${ROAD_DISTANCE_FACTOR}), ETA: ${etaMinutes} dk`);
+    console.log(`🔍 ⏱️ Hız: ${speedKmh} km/h (stabil), Mesafe: ${Math.round(effectiveDistance)}m (${distanceSource}), ETA: ${etaMinutes} dk`);
 
     if (etaMinutes > 30) {
       return {
@@ -413,37 +436,42 @@ class ETAService {
     line: string,
     vehicles: BusPosition[]
   ): Promise<ETAResult> {
-    // Önce normal ETA hesapla
-    const result = this.calculateETA(userLocation, line, vehicles);
+    // Bizim rota-bazlı hesap: durak çözümü + Nimbus yoksa fallback olarak kullanılır
+    const localResult = this.calculateETA(userLocation, line, vehicles);
 
-    // Eğer araç bulunduysa, sonucu döndür
-    if (result.status === 'ok') {
-      return result;
-    }
-
-    // Araç bulunamadıysa ve durak bilgisi varsa, Nimbus'tan tarifeli zamanları çek
-    if (result.stopId) {
-      const stopWialonId = this.extractWialonId(result.stopId);
+    // Durak çözülebildiyse Nimbus'un kendi ETA'sını BİRİNCİL kaynak olarak dene.
+    // Nimbus, gerçek yol geometrisi + geçmiş hız profiliyle hesapladığı için
+    // bizim hesaptan daha stabil ve doğru.
+    if (localResult.stopId) {
+      const stopWialonId = this.extractWialonId(localResult.stopId);
 
       if (stopWialonId) {
-        console.log(`🔍 📅 Nimbus'tan tarifeli varışlar çekiliyor...`);
+        console.log(`🔍 📅 Nimbus ETA (birincil) çekiliyor...`);
         const scheduledArrivals = await this.getScheduledArrivals(stopWialonId, line);
 
         if (scheduledArrivals.length > 0) {
-          console.log(`🔍 📅 Nimbus'tan ${scheduledArrivals.length} tarifeli varış bulundu`);
-          scheduledArrivals.forEach(a => {
-            console.log(`🔍 📅   ${a.line} ${a.direction}: ${a.etaMinutes} dk`);
-          });
+          const primary = scheduledArrivals[0]; // en yakın varış
+          console.log(
+            `🔍 ✅ Nimbus birincil ETA: ${primary.line} ${primary.direction} → ${primary.etaMinutes} dk`
+          );
 
           return {
-            ...result,
+            ...localResult,
+            status: 'ok',
+            etaMinutes: primary.etaMinutes,
+            line: localResult.line || primary.line,
+            direction: primary.direction || localResult.direction,
+            errorMessage: undefined, // eski local hata mesajını taşıma
             scheduledArrivals,
           };
         }
+
+        console.log('🔍 ⚠️ Nimbus ETA vermedi, bizim rota-bazlı hesap kullanılıyor');
       }
     }
 
-    return result;
+    // Nimbus veri vermediyse bizim sonuç (route-based ETA veya ilgili hata)
+    return localResult;
   }
 }
 
