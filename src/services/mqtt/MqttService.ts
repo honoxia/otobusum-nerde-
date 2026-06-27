@@ -10,6 +10,7 @@ import mqtt from 'precompiled-mqtt';
 import { BusPosition } from '../../types/shared-types';
 import routesData from '../../data/routes-data.json';
 import { config } from '../../config';
+import nimbusService from '../NimbusService';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 type VehicleUpdateCallback = (vehicle: BusPosition) => void;
@@ -237,13 +238,6 @@ class MqttService {
   async connect(): Promise<void> {
     if (this.client || this.isConnecting) return;
 
-    if (!config.flespi.token) {
-      const message = 'Flespi token missing. Set FLESPI_TOKEN or EXPO_PUBLIC_FLESPI_TOKEN.';
-      console.error('[MQTT] ❌', message);
-      this.notifyStatus('error', message);
-      return;
-    }
-
     this.isConnecting = true;
     this.notifyStatus('connecting');
 
@@ -254,12 +248,29 @@ class MqttService {
     console.log('🚌 ═══════════════════════════════════════');
     console.log('');
 
+    // Token önceliği: locator sayfasındaki public token (bu sistemin asıl/canlı
+    // token'ı orada) -> alınamazsa .env'deki token fallback olarak kullanılır.
+    console.log('[MQTT] Locator public token çekiliyor...');
+    let token = (await nimbusService.fetchLocatorToken()) || '';
+    if (!token) {
+      console.log('[MQTT] Locator token alınamadı, .env token deneniyor');
+      token = config.flespi.token;
+    }
+
+    if (!token) {
+      const message = 'Flespi token alınamadı (locator çekilemedi ve .env boş).';
+      console.error('[MQTT] ❌', message);
+      this.isConnecting = false;
+      this.notifyStatus('error', message);
+      return;
+    }
+
     // Önce HTTP ile ünite isimlerini al
     await this.fetchInitialUnits();
 
     try {
       this.client = mqtt.connect(config.mqtt.broker, {
-        username: config.flespi.token,
+        username: token,
         clientId: `nimbus_${Date.now()}`,
         clean: true,
         protocolVersion: 5

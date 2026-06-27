@@ -45,6 +45,40 @@ class NimbusService {
   }
 
   /**
+   * Locator sayfasına gömülü public Flespi token'ını çeker.
+   * Belediyenin QR sistemi MQTT'ye bu token ile bağlanıyor; token sayfanın
+   * APP_CONFIG objesinde açıkça duruyor. Rotasyona dayanıklı olmak için
+   * elle .env'e yazmak yerine runtime'da buradan okunur.
+   */
+  async fetchLocatorToken(): Promise<string | null> {
+    try {
+      const url = `https://nimbus.wialon.com/locator/${this.locatorHash}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error(`[NimbusService] Locator sayfası alınamadı: ${response.status}`);
+        return null;
+      }
+      const html = await response.text();
+      const match = html.match(/APP_CONFIG\s*=\s*'([^']+)'/);
+      if (!match) {
+        console.error('[NimbusService] APP_CONFIG bulunamadı');
+        return null;
+      }
+      const appConfig = JSON.parse(match[1]);
+      const token = appConfig.flespi_token;
+      if (!token) {
+        console.error('[NimbusService] flespi_token APP_CONFIG içinde yok');
+        return null;
+      }
+      console.log('[NimbusService] ✅ Public Flespi token locator sayfasından alındı');
+      return token;
+    } catch (error) {
+      console.error('[NimbusService] Token çekme hatası:', error);
+      return null;
+    }
+  }
+
+  /**
    * Durak için beklenen varış zamanlarını getir
    * @param stopWialonId Durak Wialon ID'si (örn: 557364)
    */
