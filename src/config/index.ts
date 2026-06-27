@@ -33,4 +33,16 @@ export const config = {
   nimbus: {
     locatorHash: extra.NIMBUS_LOCATOR_HASH || process.env.NIMBUS_LOCATOR_HASH || '4d5af2578d1f42adabc3165aa4456953',
   },
+  // Harita modu: 'osm' (varsayılan, ücretsiz) veya 'google' (key gerektirir)
+  map: {
+    provider: (extra.MAP_PROVIDER || process.env.EXPO_PUBLIC_MAP_PROVIDER || 'osm') as 'google' | 'osm',
+    // Mevcut Expo public değişken düzeni korunur
+    googleApiKey:
+      extra.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    // Tile URL config'te tutulur; sonra Carto/MapTiler/Stadia'ya geçiş kolay olsun
+    tileUrl:
+      extra.MAP_TILE_URL ||
+      process.env.EXPO_PUBLIC_MAP_TILE_URL ||
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  },
 };

@@ -1,11 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { StyleSheet, Platform, View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Coordinates, BusStop, BusPosition } from '../../types/shared-types';
-import { MAP_CONFIG } from '../../utils/constants';
-import { StopMarker } from './StopMarker';
-import { UserMarker } from './UserMarker';
-import { BusMarker } from './BusMarker';
+import { config } from '../../config';
+import { GoogleMapView } from './GoogleMapView';
+import { OsmMapView } from './OsmMapView';
 
 interface MapContainerProps {
   userLocation: Coordinates | null;
@@ -17,8 +15,10 @@ interface MapContainerProps {
 }
 
 /**
- * Ana harita component'i.
- * Google Maps API key yoksa uygulama haritasiz liste modunda calisir.
+ * Ana harita component'i. Harita modunu seçer:
+ *  - provider 'google' + API key varsa  -> Google Maps
+ *  - provider 'osm' veya key yoksa       -> OSM (Leaflet/WebView)
+ *  - OSM/WebView yüklenemezse            -> haritasız liste modu (son fallback)
  */
 export const MapContainer: React.FC<MapContainerProps> = ({
   userLocation,
@@ -28,140 +28,110 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   onStopPress,
   onBusPress,
 }) => {
-  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-  const mapRef = useRef<MapView>(null);
-  const [isMapReady, setIsMapReady] = useState(false);
-  const [hasZoomedToUser, setHasZoomedToUser] = useState(false);
-
-  const handleMapReady = () => {
-    console.log('[MAP] Map is ready');
-    setIsMapReady(true);
-  };
+  const { provider, googleApiKey } = config.map;
+  const useGoogle = provider === 'google' && !!googleApiKey;
+  const [osmFailed, setOsmFailed] = useState(false);
 
   useEffect(() => {
-    if (isMapReady && mapRef.current && userLocation && !hasZoomedToUser) {
-      console.log('[MAP] Zooming to user location:', userLocation);
-      setTimeout(() => {
-        mapRef.current?.animateToRegion(
-          {
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
-            latitudeDelta: 0.008,
-            longitudeDelta: 0.008,
-          },
-          1000
-        );
-        setHasZoomedToUser(true);
-      }, 500);
-    }
-  }, [isMapReady, userLocation, hasZoomedToUser]);
+    console.log(
+      `[MAP] provider=${provider} useGoogle=${useGoogle} | ${stops.length} stops, ${buses.length} buses`
+    );
+  }, [provider, useGoogle, stops.length, buses.length]);
 
-  useEffect(() => {
-    console.log(`[MAP] Rendering ${stops.length} stops, ${buses.length} buses`);
-  }, [stops.length, buses.length]);
-
-  if (!googleMapsApiKey) {
+  // 1) Google Maps
+  if (useGoogle) {
     return (
-      <View style={styles.fallbackContainer}>
-        <View style={styles.fallbackHeader}>
-          <Text style={styles.fallbackTitle}>Haritasiz mod</Text>
-          <Text style={styles.fallbackSubtitle}>
-            Google Maps API key yokken durak ve otobus verileri liste olarak gosterilir.
-          </Text>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.fallbackContent}>
-          {userLocation && (
-            <View style={styles.locationCard}>
-              <Text style={styles.sectionLabel}>Konum</Text>
-              <Text style={styles.primaryText}>
-                {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Yakindaki duraklar ({stops.length})</Text>
-            {stops.length === 0 ? (
-              <Text style={styles.emptyText}>Yakinda durak bulunamadi.</Text>
-            ) : (
-              stops.slice(0, 12).map((stop) => (
-                <TouchableOpacity
-                  key={stop.id}
-                  style={[
-                    styles.listItem,
-                    stop.id === nearestStopId && styles.nearestListItem,
-                  ]}
-                  onPress={() => onStopPress?.(stop)}
-                >
-                  <Text style={styles.itemTitle}>{stop.name}</Text>
-                  <Text style={styles.itemMeta} numberOfLines={1}>
-                    {stop.lines.join(', ')}
-                  </Text>
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Canli otobusler ({buses.length})</Text>
-            {buses.length === 0 ? (
-              <Text style={styles.emptyText}>Henuz canli otobus verisi yok.</Text>
-            ) : (
-              buses.slice(0, 20).map((bus) => (
-                <TouchableOpacity
-                  key={bus.deviceId}
-                  style={styles.listItem}
-                  onPress={() => onBusPress?.(bus)}
-                >
-                  <Text style={styles.itemTitle}>Hat {bus.line}</Text>
-                  <Text style={styles.itemMeta}>
-                    {bus.coordinates.latitude.toFixed(5)}, {bus.coordinates.longitude.toFixed(5)}
-                  </Text>
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
-        </ScrollView>
-      </View>
+      <GoogleMapView
+        userLocation={userLocation}
+        stops={stops}
+        nearestStopId={nearestStopId}
+        buses={buses}
+        onStopPress={onStopPress}
+        onBusPress={onBusPress}
+      />
     );
   }
 
+  // 2) OSM (WebView + Leaflet)
+  if (!osmFailed) {
+    return (
+      <OsmMapView
+        userLocation={userLocation}
+        stops={stops}
+        nearestStopId={nearestStopId}
+        buses={buses}
+        onStopPress={onStopPress}
+        onBusPress={onBusPress}
+        onError={() => setOsmFailed(true)}
+      />
+    );
+  }
+
+  // 3) Son fallback: haritasız liste modu
   return (
-    <MapView
-      ref={mapRef}
-      style={styles.map}
-      provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-      initialRegion={MAP_CONFIG.INITIAL_REGION}
-      showsUserLocation={false}
-      onMapReady={handleMapReady}
-    >
-      {userLocation && <UserMarker coordinates={userLocation} />}
+    <View style={styles.fallbackContainer}>
+      <View style={styles.fallbackHeader}>
+        <Text style={styles.fallbackTitle}>Haritasiz mod</Text>
+        <Text style={styles.fallbackSubtitle}>
+          Harita yuklenemedi; durak ve otobus verileri liste olarak gosteriliyor.
+        </Text>
+      </View>
 
-      {stops.map((stop) => (
-        <StopMarker
-          key={stop.id}
-          stop={stop}
-          isNearest={stop.id === nearestStopId}
-          onPress={() => onStopPress?.(stop)}
-        />
-      ))}
+      <ScrollView contentContainerStyle={styles.fallbackContent}>
+        {userLocation && (
+          <View style={styles.locationCard}>
+            <Text style={styles.sectionLabel}>Konum</Text>
+            <Text style={styles.primaryText}>
+              {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
+            </Text>
+          </View>
+        )}
 
-      {buses.map((bus) => (
-        <BusMarker
-          key={bus.deviceId}
-          bus={bus}
-          onPress={() => onBusPress?.(bus)}
-        />
-      ))}
-    </MapView>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Yakindaki duraklar ({stops.length})</Text>
+          {stops.length === 0 ? (
+            <Text style={styles.emptyText}>Yakinda durak bulunamadi.</Text>
+          ) : (
+            stops.slice(0, 12).map((stop) => (
+              <TouchableOpacity
+                key={stop.id}
+                style={[styles.listItem, stop.id === nearestStopId && styles.nearestListItem]}
+                onPress={() => onStopPress?.(stop)}
+              >
+                <Text style={styles.itemTitle}>{stop.name}</Text>
+                <Text style={styles.itemMeta} numberOfLines={1}>
+                  {stop.lines.join(', ')}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Canli otobusler ({buses.length})</Text>
+          {buses.length === 0 ? (
+            <Text style={styles.emptyText}>Henuz canli otobus verisi yok.</Text>
+          ) : (
+            buses.slice(0, 20).map((bus) => (
+              <TouchableOpacity
+                key={bus.deviceId}
+                style={styles.listItem}
+                onPress={() => onBusPress?.(bus)}
+              >
+                <Text style={styles.itemTitle}>Hat {bus.line}</Text>
+                <Text style={styles.itemMeta}>
+                  {bus.coordinates.latitude.toFixed(5)}, {bus.coordinates.longitude.toFixed(5)}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  map: {
-    flex: 1,
-  },
   fallbackContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
