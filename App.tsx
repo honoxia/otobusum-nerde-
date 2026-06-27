@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
   useColorScheme,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -266,35 +267,42 @@ function AppContent() {
 
       {/* Bottom Panel */}
       <View style={[styles.bottomContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
-        {/* Real-time Connection Status */}
-        <View style={styles.statusRow}>
-          <View style={[
-            styles.statusDot,
-            { backgroundColor: isConnected ? theme.colors.success : theme.colors.error }
-          ]} />
-          <Text style={[styles.statusText, { color: theme.colors.textSecondary }]}>
-            {isConnected ? `Canlı: ${buses.length} otobüs` : connectionStatus === 'connecting' ? 'Bağlanıyor...' : 'Bağlantı yok'}
-          </Text>
-        </View>
-
-        {/* Nearest Stop Card */}
-        {isLoading ? (
-          <SkeletonCard />
-        ) : nearestStop?.stop && (
-          <StopCard
-            stop={nearestStop.stop}
-            distance={nearestStop.distance}
-            onLinePress={handleLinePress}
-            selectedLine={selectedLine}
-          />
-        )}
-
-        {/* ETA Result */}
-        {etaResult && (
-          <View style={styles.etaContainer}>
-            <ETACard result={etaResult} />
+        {/* Kaydırılabilir kart alanı (harita için yükseklik tavanı) */}
+        <ScrollView
+          style={styles.bottomScroll}
+          contentContainerStyle={styles.bottomScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Real-time Connection Status */}
+          <View style={styles.statusRow}>
+            <View style={[
+              styles.statusDot,
+              { backgroundColor: isConnected ? theme.colors.success : theme.colors.error }
+            ]} />
+            <Text style={[styles.statusText, { color: theme.colors.textSecondary }]}>
+              {isConnected ? `Canlı: ${buses.length} otobüs` : connectionStatus === 'connecting' ? 'Bağlanıyor...' : 'Bağlantı yok'}
+            </Text>
           </View>
-        )}
+
+          {/* Nearest Stop Card */}
+          {isLoading ? (
+            <SkeletonCard />
+          ) : nearestStop?.stop && (
+            <StopCard
+              stop={nearestStop.stop}
+              distance={nearestStop.distance}
+              onLinePress={handleLinePress}
+              selectedLine={selectedLine}
+            />
+          )}
+
+          {/* ETA Result */}
+          {etaResult && (
+            <View style={styles.etaContainer}>
+              <ETACard result={etaResult} />
+            </View>
+          )}
+        </ScrollView>
 
         {/* Query Input */}
         <View style={styles.inputRow}>
@@ -393,9 +401,18 @@ const styles = StyleSheet.create({
   },
   bottomContainer: {
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 16,
     borderTopWidth: 1,
-    gap: 12,
+    gap: 8,
+    // Alt panel ekranın yarısını geçmesin; kalan yer haritaya gider
+    maxHeight: '55%',
+  },
+  bottomScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  bottomScrollContent: {
+    gap: 8,
   },
   statusRow: {
     flexDirection: 'row',

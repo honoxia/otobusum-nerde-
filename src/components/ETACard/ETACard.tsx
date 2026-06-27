@@ -118,7 +118,7 @@ export const ETACard: React.FC<ETACardProps> = ({ result }) => {
       {result.scheduledArrivals && result.scheduledArrivals.length > 0 && (
         <View style={styles.scheduledContainer}>
           <Text style={styles.scheduledTitle}>Tarifeli Varış Zamanları</Text>
-          {result.scheduledArrivals.slice(0, 3).map((arrival, index) => (
+          {result.scheduledArrivals.slice(0, 2).map((arrival, index) => (
             <View key={index} style={styles.scheduledRow}>
               <Text style={styles.scheduledLine}>{arrival.line}</Text>
               <Text style={styles.scheduledDirection}>{arrival.direction}</Text>
@@ -134,91 +134,91 @@ export const ETACard: React.FC<ETACardProps> = ({ result }) => {
 const styles = StyleSheet.create({
   container: {
     borderRadius: 16,
-    padding: 20,
+    padding: 12,
     alignItems: 'center',
   },
   lineContainer: {
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  lineLabel: {
-    fontSize: 12,
     marginBottom: 2,
   },
+  lineLabel: {
+    fontSize: 11,
+    marginBottom: 1,
+  },
   lineNumber: {
-    fontSize: 32,
+    fontSize: 22,
     fontWeight: '800',
     color: '#fff',
   },
   directionText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.85)',
-    marginTop: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    marginTop: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     backgroundColor: 'rgba(0,0,0,0.15)',
     borderRadius: 12,
     overflow: 'hidden',
   },
   etaContainer: {
     alignItems: 'center',
-    marginVertical: 8,
+    marginVertical: 2,
   },
   etaMinutes: {
-    fontSize: 72,
+    fontSize: 44,
     fontWeight: '800',
     color: '#fff',
-    lineHeight: 80,
+    lineHeight: 48,
   },
   etaLabel: {
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '500',
     color: '#fff',
-    marginTop: -4,
+    marginTop: -2,
   },
   statusText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#fff',
     textAlign: 'center',
-    paddingVertical: 20,
+    paddingVertical: 10,
   },
   stopContainer: {
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   stopLabel: {
     fontSize: 11,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   stopName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#fff',
   },
   distanceText: {
     fontSize: 12,
-    marginTop: 8,
+    marginTop: 4,
   },
   scheduledContainer: {
-    marginTop: 16,
-    paddingTop: 16,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.2)',
     width: '100%',
   },
   scheduledTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.8)',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   scheduledRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 8,
     backgroundColor: 'rgba(0,0,0,0.1)',
     borderRadius: 8,
