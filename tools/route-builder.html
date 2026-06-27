@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dolmuş/Hat Güzergah Çizici</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root { --green:#2e7d32; --red:#c62828; --blue:#1565c0; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; color:#222; }
+  #map { height: 62vh; }
+  .bar { padding: 8px 12px; display:flex; gap:8px; align-items:center; flex-wrap: wrap; border-bottom:1px solid #eee; }
+  .btn { padding: 6px 11px; border:1px solid #ccc; background:#fafafa; cursor:pointer; border-radius:6px; font-size:13px; }
+  .btn:hover { background:#f0f0f0; }
+  .btn.active { background:#e8f0ff; border-color:#8da8ff; }
+  .btn.primary { background:var(--green); color:#fff; border-color:var(--green); }
+  .btn.danger { background:#ffebee; border-color:#f44336; color:#d32f2f; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  input[type=text], input[type=number] { padding:6px 8px; border-radius:6px; border:1px solid #ccc; font:inherit; font-size:13px; }
+  label.f { display:inline-flex; gap:6px; align-items:center; font-size:13px; }
+  .panel { padding: 10px 12px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .status { padding:6px 10px; border-radius:6px; font-size:12px; }
+  .status.info { background:#e3f2fd; color:#1565c0; }
+  .status.ok { background:#e8f5e9; color:#2e7d32; }
+  .status.err { background:#ffebee; color:#c62828; }
+  .status.warn { background:#fff3e0; color:#ef6c00; }
+  textarea { width:100%; min-height:120px; font-family: ui-monospace, Consolas, monospace; font-size:12px; padding:8px; border:1px solid #ccc; border-radius:6px; }
+  .pill { padding:4px 9px; border-radius:999px; border:1px solid #ddd; background:#fff; font-size:12px; }
+  .hint { color:#666; font-size:12px; }
+  h3 { margin:14px 0 6px; font-size:14px; }
+  .legend { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; color:#555; }
+  .dot { width:11px; height:11px; border-radius:50%; display:inline-block; vertical-align:middle; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <button id="addRouteBtn" class="btn active">🟢 Güzergah noktası ekle</button>
+  <button id="insertBtn" class="btn" title="Tıkladığın yeri en yakın iki nokta arasına ekler">➕ Ara nokta ekle</button>
+  <button id="deleteBtn" class="btn" title="Bir güzergah noktasına tıklayıp sil (markera sağ tık da siler)">✂️ Nokta sil</button>
+  <button id="addStopBtn" class="btn">📍 İsimli durak ekle</button>
+  <button id="undoBtn" class="btn" title="Son güzergah noktasını sil">↶ Geri al</button>
+  <label class="f" title="Güzergahı başlangıç noktasına geri kapatır (gidiş-dönüş tek tur)">
+    <input type="checkbox" id="loopChk"> Halka (başa dön)
+  </label>
+  <button id="snapBtn" class="btn primary">🛣️ Yola Oturt (OSRM)</button>
+  <button id="clearBtn" class="btn danger">🗑️ Temizle</button>
+  <span id="info" class="pill">0 nokta</span>
+</div>
+
+<div id="map"></div>
+
+<div class="panel">
+  <div class="row">
+    <label class="f"><strong>Hat adı:</strong> <input id="lineName" type="text" value="KIRMIZI 23" size="14"></label>
+    <label class="f"><strong>Renk:</strong> <input id="lineColor" type="text" value="#E11D2A" size="8"></label>
+    <span id="status" class="status info">Haritaya tıklayarak güzergah noktalarını sırayla koy, sonra "Yola Oturt".</span>
+  </div>
+
+  <div class="legend" style="margin-top:8px;">
+    <span><span class="dot" style="background:#1565c0;"></span> güzergah noktası (via)</span>
+    <span><span class="dot" style="background:#E11D2A;"></span> isimli durak</span>
+    <span><span class="dot" style="background:#E11D2A;"></span> yola oturmuş rota</span>
+  </div>
+
+  <h3>İçe aktar</h3>
+  <div class="row">
+    <label class="f">Dosya (KML / JSON): <input id="importFile" type="file" accept=".kml,.json"></label>
+    <span class="hint">Mevcut <code>path</code>, tam hat JSON veya KML yükleyip düzenleyebilirsin.</span>
+  </div>
+
+  <h3>Dışa aktar</h3>
+  <div class="row">
+    <button id="expPath" class="btn">📋 Proje JSON (path)</button>
+    <button id="expLine" class="btn">🧩 Tam hat JSON</button>
+    <button id="expKml" class="btn">🗺️ KML</button>
+    <button id="copyOut" class="btn">⧉ Çıktıyı kopyala</button>
+    <button id="dlOut" class="btn">💾 Dosyaya indir</button>
+    <span class="hint">"Proje JSON" → doğrudan <code>dolmus-data.json</code> içindeki <code>path</code> alanına yapıştırılır.</span>
+  </div>
+  <textarea id="out" placeholder="Dışa aktarım çıktısı burada görünür..."></textarea>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ---- Harita ----
+const map = L.map('map').setView([39.781, 30.51], 13); // Eskişehir merkez
+const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap' }).addTo(map);
+const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19, attribution:'Tiles &copy; Esri' });
+L.control.layers({ 'OSM': osm, 'Uydu': sat }, null, { collapsed:false }).addTo(map);
+
+// ---- Durum ----
+let mode = 'route';                 // 'route' | 'stop'
+let routePts = [];                  // {marker, latlng} sıralı via noktaları
+let stops = [];                     // {marker, name, minute}
+let snappedLayer = null;            // yola oturmuş polyline
+let snappedPath = [];               // [{latitude, longitude}]
+
+const $ = id => document.getElementById(id);
+function setStatus(msg, type='info'){ const s=$('status'); s.className='status '+type; s.textContent=msg; }
+function updateInfo(){ $('info').textContent = `${routePts.length} nokta · ${stops.length} durak` + (snappedPath.length?` · ${snappedPath.length} path`:''); }
+
+// ---- Mod butonları ----
+function setMode(m){
+  mode = m;
+  $('addRouteBtn').classList.toggle('active', m==='route');
+  $('insertBtn').classList.toggle('active', m==='insert');
+  $('deleteBtn').classList.toggle('active', m==='delete');
+  $('addStopBtn').classList.toggle('active', m==='stop');
+}
+$('addRouteBtn').onclick = () => setMode('route');
+$('insertBtn').onclick   = () => setMode('insert');
+$('deleteBtn').onclick   = () => setMode('delete');
+$('addStopBtn').onclick  = () => setMode('stop');
+
+function routeColor(){ return $('lineColor').value.trim() || '#E11D2A'; }
+
+// ---- Marker stilleri ----
+function viaIcon(n){ return L.divIcon({ className:'', html:`<div style="background:#1565c0;color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.4)">${n}</div>`, iconSize:[20,20], iconAnchor:[10,10] }); }
+function stopIcon(label){ return L.divIcon({ className:'', html:`<div style="background:#E11D2A;color:#fff;padding:3px 7px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.4)">${label}</div>`, iconSize:[null,null] }); }
+
+function renumberVia(){ routePts.forEach((p,i)=> p.marker.setIcon(viaIcon(i+1))); }
+
+function makeVia(latlng){
+  const marker = L.marker(latlng, { draggable:true, icon: viaIcon(0) }).addTo(map);
+  const obj = { marker, latlng };
+  marker.on('drag', e => { obj.latlng = e.target.getLatLng(); });
+  marker.on('dragend', () => { if (snappedLayer) setStatus('Noktalar değişti, tekrar "Yola Oturt".','warn'); });
+  marker.on('click', () => { if (mode==='delete') deleteVia(obj); });
+  marker.on('contextmenu', () => deleteVia(obj)); // sağ tık her zaman siler
+  return obj;
+}
+function addRoutePoint(latlng){
+  routePts.push(makeVia(latlng));
+  renumberVia(); updateInfo();
+}
+function deleteVia(obj){
+  const i = routePts.indexOf(obj);
+  if (i === -1) return;
+  map.removeLayer(obj.marker);
+  routePts.splice(i, 1);
+  renumberVia(); updateInfo();
+  if (snappedLayer) setStatus('Nokta silindi, tekrar "Yola Oturt".','warn');
+}
+// Tıklanan noktayı en yakın iki ardışık nokta arasına ekler
+function insertRoutePoint(latlng){
+  if (routePts.length < 2){ addRoutePoint(latlng); return; }
+  let bestIdx = routePts.length - 1, bestDist = Infinity;
+  for (let i=0; i<routePts.length-1; i++){
+    const d = L.LineUtil.pointToSegmentDistance(
+      map.latLngToLayerPoint(latlng),
+      map.latLngToLayerPoint(routePts[i].latlng),
+      map.latLngToLayerPoint(routePts[i+1].latlng)
+    );
+    if (d < bestDist){ bestDist = d; bestIdx = i; }
+  }
+  routePts.splice(bestIdx+1, 0, makeVia(latlng));
+  renumberVia(); updateInfo();
+  if (snappedLayer) setStatus(`Ara nokta ${bestIdx+2}. sıraya eklendi, tekrar "Yola Oturt".`,'warn');
+}
+
+function addStop(latlng){
+  const name = prompt('Durak adı:', `Durak ${stops.length+1}`);
+  if (name === null) return;
+  const minStr = prompt('İlk duraktan kaç dakika sonra? (boş geç = -)', '');
+  const minute = minStr && !isNaN(parseInt(minStr)) ? parseInt(minStr) : null;
+  const label = minute!=null ? `${name} (${minute}')` : name;
+  const marker = L.marker(latlng, { draggable:true, icon: stopIcon(label) }).addTo(map);
+  stops.push({ marker, name, minute });
+  updateInfo();
+}
+
+map.on('click', e => {
+  if (mode==='route') addRoutePoint(e.latlng);
+  else if (mode==='insert') insertRoutePoint(e.latlng);
+  else if (mode==='stop') addStop(e.latlng);
+  // 'delete' modunda haritaya tık bir şey yapmaz; marker'a tıklanır
+});
+
+$('undoBtn').onclick = () => {
+  const p = routePts.pop();
+  if (p) { map.removeLayer(p.marker); renumberVia(); updateInfo(); }
+};
+
+$('clearBtn').onclick = () => {
+  routePts.forEach(p=>map.removeLayer(p.marker)); routePts=[];
+  stops.forEach(s=>map.removeLayer(s.marker)); stops=[];
+  if (snappedLayer){ map.removeLayer(snappedLayer); snappedLayer=null; }
+  snappedPath=[]; $('out').value='';
+  updateInfo(); setStatus('Temizlendi.','info');
+};
+
+// ---- OSRM ile yola oturt ----
+$('snapBtn').onclick = async () => {
+  let pts = routePts.map(p => p.latlng);
+  if (pts.length < 2) { setStatus('En az 2 güzergah noktası gerekli.','err'); return; }
+  if ($('loopChk').checked) pts = pts.concat([pts[0]]); // başa dön
+  setStatus('OSRM ile yola oturtuluyor...','info');
+  try {
+    const coordStr = pts.map(ll => `${ll.lng},${ll.lat}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson&continue_straight=false`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('OSRM '+res.status);
+    const data = await res.json();
+    if (!data.routes || !data.routes.length) throw new Error('Rota bulunamadı');
+    const r = data.routes[0];
+    snappedPath = r.geometry.coordinates.map(c => ({ latitude:+c[1].toFixed(6), longitude:+c[0].toFixed(6) }));
+    if (snappedLayer) map.removeLayer(snappedLayer);
+    snappedLayer = L.polyline(snappedPath.map(p=>[p.latitude,p.longitude]), { color:routeColor(), weight:6, opacity:.95 }).addTo(map);
+    map.fitBounds(snappedLayer.getBounds(), { padding:[25,25] });
+    setStatus(`Tamam: ${snappedPath.length} nokta · ${(r.distance/1000).toFixed(2)} km · ~${(r.duration/60).toFixed(0)} dk (araç).`,'ok');
+    updateInfo();
+  } catch(err){ setStatus('Hata: '+err.message+' (OSRM demo sunucusu yoğun olabilir, tekrar dene).','err'); }
+};
+
+// ---- Dışa aktar ----
+function buildStopsArray(){
+  return stops.map(s => {
+    const ll = s.marker.getLatLng();
+    return { name:s.name, minutesFromStart:s.minute, direction:null, coordinates:{ latitude:+ll.lat.toFixed(7), longitude:+ll.lng.toFixed(7) } };
+  });
+}
+function exportPath(){
+  if (!snappedPath.length) { setStatus('Önce "Yola Oturt" ile rota oluştur.','err'); return; }
+  $('out').value = JSON.stringify(snappedPath, null, 2);
+  setStatus('Proje JSON (path) çıkarıldı — dolmus-data.json içindeki "path" alanına yapıştır.','ok');
+}
+function exportLine(){
+  if (!snappedPath.length) { setStatus('Önce "Yola Oturt" ile rota oluştur.','err'); return; }
+  const obj = {
+    line: $('lineName').value.trim() || 'YENI HAT',
+    operator: '', color: $('lineColor').value.trim() || '#1565c0',
+    firstStop: stops[0]?.name || '', loop: $('loopChk').checked,
+    waypoints: buildStopsArray(),
+    path: snappedPath,
+    schedule: { weekday:{}, saturday:{}, sunday:{} }
+  };
+  $('out').value = JSON.stringify([obj], null, 2);
+  setStatus('Tam hat JSON çıkarıldı (schedule boş — saatleri sonra eklersin).','ok');
+}
+function exportKml(){
+  if (!snappedPath.length) { setStatus('Önce "Yola Oturt" ile rota oluştur.','err'); return; }
+  const name = $('lineName').value.trim() || 'Güzergah';
+  const kmlColor = hexToKml(routeColor());
+  const coords = snappedPath.map(p => `${p.longitude},${p.latitude},0`).join('\n          ');
+  const stopMarks = buildStopsArray().map((s,i) =>
+    `      <Placemark><name>${(s.name||('Durak '+(i+1))).replace(/&/g,'&amp;')}</name><Point><coordinates>${s.coordinates.longitude},${s.coordinates.latitude},0</coordinates></Point></Placemark>`
+  ).join('\n');
+  const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${name.replace(/&/g,'&amp;')}</name>
+    <Style id="line"><LineStyle><color>${kmlColor}</color><width>5</width></LineStyle></Style>
+    <Placemark>
+      <name>${name.replace(/&/g,'&amp;')} — rota</name>
+      <styleUrl>#line</styleUrl>
+      <LineString><tessellate>1</tessellate><coordinates>
+          ${coords}
+      </coordinates></LineString>
+    </Placemark>
+${stopMarks ? '    <Folder><name>Duraklar</name>\n'+stopMarks+'\n    </Folder>\n' : ''}  </Document>
+</kml>`;
+  $('out').value = kml;
+  downloadText(`${name.replace(/\s+/g,'_')}.kml`, kml, 'application/vnd.google-earth.kml+xml');
+  setStatus('KML çıkarıldı ve indirildi.','ok');
+}
+// #RRGGBB -> KML aabbggrr (tam opak)
+function hexToKml(hex){
+  const h = (hex||'').replace('#','');
+  if (h.length !== 6) return 'ffe11d2a';
+  const r=h.slice(0,2), g=h.slice(2,4), b=h.slice(4,6);
+  return 'ff'+b+g+r;
+}
+function downloadText(filename, text, mime){
+  const blob = new Blob([text], { type: mime+';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+}
+$('expPath').onclick = exportPath;
+$('expLine').onclick = exportLine;
+$('expKml').onclick = exportKml;
+$('copyOut').onclick = () => { if($('out').value){ navigator.clipboard.writeText($('out').value); setStatus('Çıktı panoya kopyalandı.','ok'); } };
+$('dlOut').onclick = () => {
+  const v = $('out').value;
+  if (!v){ setStatus('Önce bir çıktı üret (Proje JSON / Tam hat JSON / KML).','err'); return; }
+  const name = ($('lineName').value.trim() || 'hat').replace(/\s+/g,'_');
+  const isKml = v.trimStart().startsWith('<');
+  downloadText(`${name}.${isKml?'kml':'json'}`, v, isKml ? 'application/vnd.google-earth.kml+xml' : 'application/json');
+  setStatus('Çıktı dosyaya indirildi.','ok');
+};
+
+// ---- İçe aktar ----
+$('importFile').onchange = async ev => {
+  const file = ev.target.files[0]; if (!file) return;
+  const text = await file.text();
+  const ext = file.name.split('.').pop().toLowerCase();
+  let path = [];
+  try {
+    if (ext === 'json') {
+      const data = JSON.parse(text);
+      if (Array.isArray(data) && data[0]?.path) path = data[0].path;            // tam hat JSON
+      else if (Array.isArray(data) && data[0]?.latitude!=null) path = data;     // path dizisi
+      else if (data.path) path = data.path;
+      else throw new Error('JSON içinde path bulunamadı');
+    } else if (ext === 'kml') {
+      const doc = new DOMParser().parseFromString(text, 'text/xml');
+      const ls = doc.getElementsByTagName('LineString')[0];
+      if (!ls) throw new Error('KML içinde LineString yok');
+      const raw = ls.getElementsByTagName('coordinates')[0].textContent.trim().split(/\s+/);
+      path = raw.map(s => { const [lng,lat] = s.split(',').map(Number); return { latitude:lat, longitude:lng }; });
+    }
+    if (!path.length) throw new Error('Koordinat çıkarılamadı');
+    snappedPath = path.map(p => ({ latitude:+(+p.latitude).toFixed(6), longitude:+(+p.longitude).toFixed(6) }));
+    if (snappedLayer) map.removeLayer(snappedLayer);
+    snappedLayer = L.polyline(snappedPath.map(p=>[p.latitude,p.longitude]), { color:routeColor(), weight:6, opacity:.95 }).addTo(map);
+    map.fitBounds(snappedLayer.getBounds(), { padding:[25,25] });
+    setStatus(`İçe aktarıldı: ${snappedPath.length} nokta. Düzenlemek için yeni via noktaları ekleyip tekrar oturtabilirsin.`,'ok');
+    updateInfo();
+  } catch(err){ setStatus('İçe aktarma hatası: '+err.message,'err'); }
+  ev.target.value='';
+};
+
+updateInfo();
+</script>
+</body>
+</html>

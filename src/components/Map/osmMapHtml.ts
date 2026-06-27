@@ -48,6 +48,19 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       box-shadow: 0 1px 3px rgba(0,0,0,0.4);
       white-space: nowrap;
     }
+    .dolmus-stop {
+      background: #E11D2A;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      width: 22px;
+      height: 22px;
+      line-height: 18px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
   </style>
 </head>
 <body>
@@ -82,6 +95,8 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       var stopsLayer = L.layerGroup().addTo(map);
       var busesLayer = L.layerGroup().addTo(map);
       var userLayer = L.layerGroup().addTo(map);
+      var dolmusRouteLayer = L.layerGroup().addTo(map);
+      var dolmusStopsLayer = L.layerGroup().addTo(map);
       var hasZoomedToUser = false;
       var tramsRendered = false;
 
@@ -213,6 +228,61 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
           marker.addTo(busesLayer);
         }
       }
+
+      // Tek bir dolmuş hattını çiz: yola oturmuş rota çizgisi + numaralı duraklar
+      function renderDolmus(d) {
+        dolmusRouteLayer.clearLayers();
+        dolmusStopsLayer.clearLayers();
+        if (!d) return;
+
+        var path = d.path || [];
+        var latLngs = [];
+        for (var i = 0; i < path.length; i++) {
+          latLngs.push([path[i].latitude, path[i].longitude]);
+        }
+        if (latLngs.length >= 2) {
+          // Beyaz dış hat (casing) + renkli rota
+          L.polyline(latLngs, {
+            color: '#fff', weight: 8, opacity: 0.9,
+            lineCap: 'round', lineJoin: 'round', interactive: false
+          }).addTo(dolmusRouteLayer);
+          L.polyline(latLngs, {
+            color: d.color || '#E11D2A', weight: 5, opacity: 0.95,
+            lineCap: 'round', lineJoin: 'round', interactive: false
+          }).addTo(dolmusRouteLayer);
+        }
+
+        var stops = d.waypoints || [];
+        for (var s = 0; s < stops.length; s++) {
+          var st = stops[s];
+          if (!st.coordinates) continue;
+          var icon = L.divIcon({
+            className: '',
+            html: '<div class="dolmus-stop">' + (s + 1) + '</div>',
+            iconSize: null
+          });
+          var marker = L.marker([st.coordinates.latitude, st.coordinates.longitude], { icon: icon });
+          var min = (st.minutesFromStart !== null && st.minutesFromStart !== undefined)
+            ? (' (' + st.minutesFromStart + ' dk)') : '';
+          marker.bindTooltip(escapeHtml(st.name) + min, { direction: 'top' });
+          marker.addTo(dolmusStopsLayer);
+        }
+
+        if (latLngs.length >= 2) {
+          try {
+            map.fitBounds(L.polyline(latLngs).getBounds(), { padding: [30, 30] });
+          } catch (e) {}
+        }
+      }
+
+      window.updateDolmusData = function (jsonString) {
+        try {
+          var data = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+          renderDolmus(data);
+        } catch (e) {
+          post({ type: 'error', message: 'updateDolmusData failed: ' + e.message });
+        }
+      };
 
       window.updateMapData = function (jsonString) {
         try {

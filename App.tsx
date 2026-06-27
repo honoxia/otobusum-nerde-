@@ -20,8 +20,11 @@ import { MapContainer } from './src/components/Map/MapContainer';
 import { StopCard } from './src/components/StopCard/StopCard';
 import { ETACard } from './src/components/ETACard/ETACard';
 import { StopDetailSheet, StopDetailSheetRef } from './src/components/BottomSheet/StopDetailSheet';
+import { DolmusMapScreen } from './src/components/Dolmus/DolmusMapScreen';
 import { Button } from './src/components/common';
 import { SkeletonCard } from './src/components/common/Skeleton';
+import dolmusData from './src/data/dolmus-data.json';
+import { DolmusLine } from './src/types/shared-types';
 
 import { useLocation } from './src/hooks/useLocation';
 import { useStops } from './src/hooks/useStops';
@@ -61,6 +64,11 @@ function AppContent() {
   const [selectedStopDistance, setSelectedStopDistance] = useState<number>(0);
   const [selectedLine, setSelectedLine] = useState<string | null>(null);
   const [mapExpanded, setMapExpanded] = useState(false); // harita büyük/küçük
+  const [dolmusOpen, setDolmusOpen] = useState(false); // dolmuş ekranı açık mı
+
+  // Statik dolmuş hatları (canlı takip yok, sabit tarife)
+  const dolmusLines = dolmusData as unknown as DolmusLine[];
+  const dolmusLine = dolmusLines[0] ?? null;
 
   // Hooks
   const { location, error: locationError, isLoading: locationLoading } = useLocation();
@@ -303,6 +311,16 @@ function AppContent() {
             </Text>
           </View>
 
+          {/* Dolmuş hatları (statik) */}
+          {dolmusLine && (
+            <TouchableOpacity
+              style={[styles.dolmusBtn, { backgroundColor: dolmusLine.color || '#E11D2A' }]}
+              onPress={() => setDolmusOpen(true)}
+            >
+              <Text style={styles.dolmusBtnText}>🚐 {dolmusLine.line} dolmuş güzergahı</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Nearest Stop Card */}
           {isLoading ? (
             <SkeletonCard />
@@ -378,6 +396,13 @@ function AppContent() {
         distance={selectedStopDistance}
         onLinePress={handleLinePress}
         onClose={handleSheetClose}
+      />
+
+      {/* Dolmuş güzergah ekranı */}
+      <DolmusMapScreen
+        visible={dolmusOpen}
+        line={dolmusLine}
+        onClose={() => setDolmusOpen(false)}
       />
 
       {/* Toast Container */}
@@ -483,6 +508,17 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
+  },
+  dolmusBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  dolmusBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   etaContainer: {
     marginVertical: 4,

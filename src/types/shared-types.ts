@@ -93,6 +93,34 @@ export interface ETAResult {
   scheduledArrivals?: ScheduledArrival[]; // Nimbus'tan gelen tarifeli varış zamanları
 }
 
+// ============= DOLMUŞ (Static minibus / no live GPS) =============
+export interface DolmusWaypoint {
+  name: string;
+  minutesFromStart: number; // İlk duraktan kaç dakika sonra buraya varılır
+  direction: 'kalkış' | 'gidiş' | 'dönüş';
+  coordinates: Coordinates | null; // null = koordinat henüz doğrulanmadı
+}
+
+// Saat -> dakikalar. Örn: { "06": [15, 29, 42, 58] }
+export type DolmusDaySchedule = Record<string, number[]>;
+
+export interface DolmusSchedule {
+  weekday: DolmusDaySchedule; // Hafta içi
+  saturday: DolmusDaySchedule; // Cumartesi
+  sunday: DolmusDaySchedule; // Pazar
+}
+
+export interface DolmusLine {
+  line: string; // "KIRMIZI 23"
+  operator: string; // İşletmeci durak adı
+  color: string; // Hat rengi (hex)
+  firstStop: string; // Kalkış durağı adı
+  loop: boolean; // Tek tur halka güzergah mı
+  waypoints: DolmusWaypoint[]; // Sıralı güzergah noktaları (duraklar + saat referansı)
+  path: Coordinates[]; // Haritaya çizilen yol geometrisi (yola oturmuş rota çizgisi)
+  schedule: DolmusSchedule; // İlk duraktan hareket saatleri
+}
+
 // ============= REAL-TIME =============
 export interface RealTimeUpdate {
   type: 'bus_position' | 'eta_update';
