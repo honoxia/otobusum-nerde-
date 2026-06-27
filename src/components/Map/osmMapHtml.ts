@@ -61,6 +61,30 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       text-align: center;
       box-shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
+    .dolmus-nearest {
+      background: #111827;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      width: 30px;
+      height: 30px;
+      line-height: 26px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      text-align: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+    }
+    .journey-marker {
+      background: #111827;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 7px;
+      border: 2px solid #fff;
+      border-radius: 14px;
+      white-space: nowrap;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    }
   </style>
 </head>
 <body>
@@ -97,8 +121,19 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       var userLayer = L.layerGroup().addTo(map);
       var dolmusRouteLayer = L.layerGroup().addTo(map);
       var dolmusStopsLayer = L.layerGroup().addTo(map);
+      var journeyLayer = L.layerGroup().addTo(map);
       var hasZoomedToUser = false;
       var tramsRendered = false;
+
+      map.on('click', function (e) {
+        post({
+          type: 'mapTap',
+          coordinates: {
+            latitude: e.latlng.lat,
+            longitude: e.latlng.lng
+          }
+        });
+      });
 
       function escapeHtml(str) {
         if (!str) return '';
@@ -268,6 +303,17 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
           marker.addTo(dolmusStopsLayer);
         }
 
+        if (d.nearestPoint) {
+          var nearestIcon = L.divIcon({
+            className: '',
+            html: '<div class="dolmus-nearest">⌖</div>',
+            iconSize: null
+          });
+          var nearestMarker = L.marker([d.nearestPoint.latitude, d.nearestPoint.longitude], { icon: nearestIcon });
+          nearestMarker.bindTooltip('Sana en yakın rota noktası', { direction: 'top' });
+          nearestMarker.addTo(dolmusStopsLayer);
+        }
+
         if (latLngs.length >= 2) {
           try {
             map.fitBounds(L.polyline(latLngs).getBounds(), { padding: [30, 30] });
@@ -302,6 +348,62 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
           renderTrams(data);
         } catch (e) {
           post({ type: 'error', message: 'updateTramData failed: ' + e.message });
+        }
+      };
+
+      function renderJourney(journey) {
+        journeyLayer.clearLayers();
+        if (!journey || !journey.legs) return;
+
+        var bounds = [];
+        for (var i = 0; i < journey.legs.length; i++) {
+          var leg = journey.legs[i];
+          var coords = leg.coordinates || [];
+          if (coords.length < 2) continue;
+
+          var latLngs = [];
+          for (var c = 0; c < coords.length; c++) {
+            latLngs.push([coords[c].latitude, coords[c].longitude]);
+            bounds.push([coords[c].latitude, coords[c].longitude]);
+          }
+
+          var color = '#111827';
+          if (leg.type === 'transit') {
+            color = leg.mode === 'bus' ? '#007AFF' : (leg.mode === 'tram' ? '#E11D48' : '#E11D2A');
+          }
+
+          L.polyline(latLngs, {
+            color: color,
+            weight: leg.type === 'walk' ? 3 : 5,
+            opacity: 0.9,
+            dashArray: leg.type === 'walk' ? '6,8' : null,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }).addTo(journeyLayer);
+
+          if (leg.type === 'transit') {
+            var icon = L.divIcon({
+              className: '',
+              html: '<div class="journey-marker">' + escapeHtml(leg.line) + '</div>',
+              iconSize: null
+            });
+            L.marker(latLngs[0], { icon: icon }).addTo(journeyLayer);
+          }
+        }
+
+        if (bounds.length >= 2) {
+          try {
+            map.fitBounds(L.latLngBounds(bounds), { padding: [35, 35] });
+          } catch (e) {}
+        }
+      }
+
+      window.updateJourneyData = function (jsonString) {
+        try {
+          var data = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+          renderJourney(data);
+        } catch (e) {
+          post({ type: 'error', message: 'updateJourneyData failed: ' + e.message });
         }
       };
 
