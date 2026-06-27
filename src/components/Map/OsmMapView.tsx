@@ -4,6 +4,7 @@ import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { Coordinates, BusStop, BusPosition } from '../../types/shared-types';
 import { config } from '../../config';
 import { buildOsmHtml } from './osmMapHtml';
+import tramData from '../../data/tram-data.json';
 
 interface OsmMapViewProps {
   userLocation: Coordinates | null;
@@ -36,12 +37,22 @@ export const OsmMapView: React.FC<OsmMapViewProps> = ({
   const html = useMemo(() => buildOsmHtml({ tileUrl: config.map.tileUrl }), []);
 
   // Güncel veriyi WebView'e gönder
+  const pushTramData = useCallback(() => {
+    const payload = JSON.stringify(tramData);
+    const script = `window.updateTramData(${JSON.stringify(payload)}); true;`;
+    webViewRef.current?.injectJavaScript(script);
+  }, []);
+
   const pushData = useCallback(() => {
     const payload = JSON.stringify({ userLocation, stops, nearestStopId, buses });
     // updateMapData WebView içinde tanımlı; string'i güvenle geçir
     const script = `window.updateMapData(${JSON.stringify(payload)}); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, [userLocation, stops, nearestStopId, buses]);
+
+  useEffect(() => {
+    if (isReady) pushTramData();
+  }, [isReady, pushTramData]);
 
   // Harita hazır olduğunda veya veri değiştiğinde tekrar gönder
   useEffect(() => {

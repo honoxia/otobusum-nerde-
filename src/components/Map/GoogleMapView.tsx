@@ -1,12 +1,13 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { StyleSheet, Platform } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Coordinates, BusStop, BusPosition } from '../../types/shared-types';
 import { MAP_CONFIG } from '../../utils/constants';
 import { StopMarker } from './StopMarker';
 import { UserMarker } from './UserMarker';
 import { BusMarker } from './BusMarker';
 import { devLog } from '../../utils/devLog';
+import tramData from '../../data/tram-data.json';
 
 interface GoogleMapViewProps {
   userLocation: Coordinates | null;
@@ -70,6 +71,41 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
       onMapReady={handleMapReady}
     >
       {userLocation && <UserMarker coordinates={userLocation} />}
+
+      {tramData.lines.flatMap((line) =>
+        line.paths.map((path, index) => (
+          <Polyline
+            key={`${line.id}_${index}_halo`}
+            coordinates={path}
+            strokeColor="#FFFFFF"
+            strokeWidth={7}
+            zIndex={1}
+          />
+        ))
+      )}
+
+      {tramData.lines.flatMap((line) =>
+        line.paths.map((path, index) => (
+          <Polyline
+            key={`${line.id}_${index}`}
+            coordinates={path}
+            strokeColor={line.color}
+            strokeWidth={4}
+            zIndex={2}
+          />
+        ))
+      )}
+
+      {tramData.stops.map((stop) => (
+        <Marker
+          key={stop.id}
+          coordinate={stop.coordinates}
+          title={stop.name}
+          description={stop.lines.length ? `Tramvay: ${stop.lines.join(', ')}` : 'Tramvay durağı'}
+          pinColor="#E11D48"
+          zIndex={3}
+        />
+      ))}
 
       {stops.map((stop) => (
         <StopMarker

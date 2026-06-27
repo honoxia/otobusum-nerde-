@@ -20,6 +20,34 @@ export interface BusStop {
   lines: string[]; // Hat numaraları: ["54", "12", "77A"]
 }
 
+// ============= TRAM (Static OSM layer / no live GPS) =============
+export interface TramStop {
+  id: string;
+  osmId: number;
+  name: string;
+  coordinates: Coordinates;
+  lines: string[];
+}
+
+export interface TramLine {
+  id: string;
+  osmId: number;
+  ref: string;
+  name: string;
+  from?: string | null;
+  to?: string | null;
+  color: string;
+  paths: Coordinates[][];
+}
+
+export interface TramNetwork {
+  source: string;
+  license: string;
+  generatedAt: string;
+  stops: TramStop[];
+  lines: TramLine[];
+}
+
 export interface NearestStopResult {
   stop: BusStop | null;
   distance: number; // meters

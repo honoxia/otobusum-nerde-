@@ -9,7 +9,7 @@ interface BuildOsmHtmlParams {
  * WebView içinde çalışacak Leaflet haritasının tam HTML'ini üretir.
  * Leaflet CSS/JS inline gömülüdür (offline-safe); sadece tile'lar network gerektirir.
  *
- * RN -> WebView köprüsü: window.updateMapData(jsonString)
+ * RN -> WebView köprüsü: window.updateTramData(jsonString), window.updateMapData(jsonString)
  * WebView -> RN köprüsü: window.ReactNativeWebView.postMessage(JSON.stringify({...}))
  */
 export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
@@ -77,10 +77,13 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
 
+      var tramTracksLayer = L.layerGroup().addTo(map);
+      var tramStopsLayer = L.layerGroup().addTo(map);
       var stopsLayer = L.layerGroup().addTo(map);
       var busesLayer = L.layerGroup().addTo(map);
       var userLayer = L.layerGroup().addTo(map);
       var hasZoomedToUser = false;
+      var tramsRendered = false;
 
       function escapeHtml(str) {
         if (!str) return '';
@@ -107,6 +110,64 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
           map.setView([userLocation.latitude, userLocation.longitude], 15, { animate: true });
           hasZoomedToUser = true;
         }
+      }
+
+      function renderTrams(trams, force) {
+        if (tramsRendered && !force) return;
+        tramTracksLayer.clearLayers();
+        tramStopsLayer.clearLayers();
+        if (!trams) return;
+
+        var lines = trams.lines || [];
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          var paths = line.paths || [];
+          for (var p = 0; p < paths.length; p++) {
+            var latLngs = [];
+            for (var c = 0; c < paths[p].length; c++) {
+              latLngs.push([paths[p][c].latitude, paths[p][c].longitude]);
+            }
+            if (latLngs.length < 2) continue;
+
+            L.polyline(latLngs, {
+              color: '#fff',
+              weight: 7,
+              opacity: 0.88,
+              lineCap: 'round',
+              lineJoin: 'round',
+              interactive: false
+            }).addTo(tramTracksLayer);
+
+            var rail = L.polyline(latLngs, {
+              color: line.color || '#E11D48',
+              weight: 4,
+              opacity: 0.9,
+              lineCap: 'round',
+              lineJoin: 'round'
+            });
+            rail.bindTooltip(escapeHtml((line.ref ? line.ref + ' - ' : '') + line.name), {
+              sticky: true
+            });
+            rail.addTo(tramTracksLayer);
+          }
+        }
+
+        var stops = trams.stops || [];
+        for (var s = 0; s < stops.length; s++) {
+          var stop = stops[s];
+          var marker = L.circleMarker([stop.coordinates.latitude, stop.coordinates.longitude], {
+            radius: 5,
+            color: '#fff',
+            weight: 2,
+            fillColor: '#E11D48',
+            fillOpacity: 0.95
+          });
+          var linesText = stop.lines && stop.lines.length ? '<br/><strong>' + escapeHtml(stop.lines.join(', ')) + '</strong>' : '';
+          marker.bindTooltip(escapeHtml(stop.name) + linesText, { direction: 'top' });
+          marker.addTo(tramStopsLayer);
+        }
+
+        tramsRendered = true;
       }
 
       function renderStops(stops, nearestStopId) {
@@ -156,11 +217,21 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       window.updateMapData = function (jsonString) {
         try {
           var data = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+          if (data.trams && !tramsRendered) renderTrams(data.trams);
           renderStops(data.stops, data.nearestStopId);
           renderBuses(data.buses);
           renderUser(data.userLocation);
         } catch (e) {
           post({ type: 'error', message: 'updateMapData failed: ' + e.message });
+        }
+      };
+
+      window.updateTramData = function (jsonString) {
+        try {
+          var data = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+          renderTrams(data);
+        } catch (e) {
+          post({ type: 'error', message: 'updateTramData failed: ' + e.message });
         }
       };
 
