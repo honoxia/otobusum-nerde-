@@ -71,6 +71,7 @@ interface LinePattern {
   mode: Exclude<TransitMode, 'walk'>;
   line: string;
   stops: JourneyStop[];
+  shapeCoordinates?: Coordinates[];
 }
 
 interface NearbyStop {
@@ -93,6 +94,14 @@ function distanceAlongStops(stops: JourneyStop[], fromIndex: number, toIndex: nu
   let total = 0;
   for (let i = fromIndex; i < toIndex; i += 1) {
     total += calculateHaversineDistance(stops[i].coordinates, stops[i + 1].coordinates);
+  }
+  return total;
+}
+
+function distanceAlongCoordinates(coordinates: Coordinates[]): number {
+  let total = 0;
+  for (let i = 0; i < coordinates.length - 1; i += 1) {
+    total += calculateHaversineDistance(coordinates[i], coordinates[i + 1]);
   }
   return total;
 }
@@ -183,14 +192,15 @@ class JourneyPlanner {
     tramNetwork.lines.forEach((line) => {
       const orderedStops = this.orderTramStops(line, tramStops);
       if (orderedStops.length >= 2) {
-        this.patterns.push({
-          id: `tram:${line.id}`,
-          mode: 'tram',
-          line: line.ref || line.name,
-          stops: orderedStops,
-        });
-      }
-    });
+          this.patterns.push({
+            id: `tram:${line.id}`,
+            mode: 'tram',
+            line: line.ref || line.name,
+            stops: orderedStops,
+            shapeCoordinates: line.paths.flat(),
+          });
+        }
+      });
 
     (dolmusData as DolmusLine[]).forEach((line, lineIndex) => {
       const stops = line.waypoints
@@ -204,6 +214,7 @@ class JourneyPlanner {
           mode: 'dolmus',
           line: line.line,
           stops,
+          shapeCoordinates: line.path,
         });
       }
     });
@@ -360,7 +371,11 @@ class JourneyPlanner {
   }
 
   private createTransitLeg(pattern: LinePattern, fromIndex: number, toIndex: number): TransitLeg {
-    const distanceMeters = distanceAlongStops(pattern.stops, fromIndex, toIndex);
+    const coordinates = this.getTransitLegCoordinates(pattern, fromIndex, toIndex);
+    const distanceMeters =
+      coordinates.length > 2
+        ? distanceAlongCoordinates(coordinates)
+        : distanceAlongStops(pattern.stops, fromIndex, toIndex);
     const averageSpeed = pattern.mode === 'tram' ? 24 : config.app.defaultBusSpeedKmh;
     const approxMin = roundMinutes(((distanceMeters * 1.25) / 1000 / averageSpeed) * 60);
 
@@ -372,8 +387,39 @@ class JourneyPlanner {
       toStop: pattern.stops[toIndex],
       numStops: toIndex - fromIndex,
       approxMin,
-      coordinates: pattern.stops.slice(fromIndex, toIndex + 1).map((stop) => stop.coordinates),
+      coordinates,
     };
+  }
+
+  private getTransitLegCoordinates(pattern: LinePattern, fromIndex: number, toIndex: number): Coordinates[] {
+    const fallback = pattern.stops.slice(fromIndex, toIndex + 1).map((stop) => stop.coordinates);
+
+    if (!pattern.shapeCoordinates || pattern.shapeCoordinates.length < 2) {
+      return fallback;
+    }
+
+    const from = nearestPointOnPath(pattern.stops[fromIndex].coordinates, pattern.shapeCoordinates);
+    const to = nearestPointOnPath(pattern.stops[toIndex].coordinates, pattern.shapeCoordinates);
+    if (!from || !to || from.cumulativeMeters >= to.cumulativeMeters) {
+      return fallback;
+    }
+
+    const cumulative = this.pathCumulativeDistances(pattern.shapeCoordinates);
+    const middle = pattern.shapeCoordinates.filter((_, index) => {
+      const meters = cumulative[index];
+      return meters > from.cumulativeMeters && meters < to.cumulativeMeters;
+    });
+
+    const coordinates = [from.point, ...middle, to.point];
+    return coordinates.length >= 2 ? coordinates : fallback;
+  }
+
+  private pathCumulativeDistances(path: Coordinates[]): number[] {
+    const distances = [0];
+    for (let i = 1; i < path.length; i += 1) {
+      distances.push(distances[i - 1] + calculateHaversineDistance(path[i - 1], path[i]));
+    }
+    return distances;
   }
 
   private createWalkLeg(

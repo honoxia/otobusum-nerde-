@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
+  ImageSourcePropType,
   ScrollView,
   StyleSheet,
   Text,
@@ -29,6 +31,12 @@ interface Destination {
   coordinates: Coordinates;
 }
 
+const MODE_ICONS: Partial<Record<string, ImageSourcePropType>> = {
+  bus: require('../../assets/menu-icons/bus.png'),
+  tram: require('../../assets/menu-icons/tram.png'),
+  dolmus: require('../../assets/menu-icons/dolmus.png'),
+};
+
 function modeLabel(mode: string): string {
   if (mode === 'bus') return 'Otobüs';
   if (mode === 'tram') return 'Tramvay';
@@ -36,12 +44,14 @@ function modeLabel(mode: string): string {
   return 'Yürü';
 }
 
-function modeIcon(mode: string): string {
-  if (mode === 'bus') return '🚌';
-  if (mode === 'tram') return '🚊';
-  if (mode === 'dolmus') return '🚐';
-  return '🚶';
-}
+const ModeIcon: React.FC<{ mode: string }> = ({ mode }) => {
+  const source = MODE_ICONS[mode];
+  if (!source) {
+    return <Text style={styles.walkIcon}>🚶</Text>;
+  }
+
+  return <Image source={source} style={styles.modeIcon} resizeMode="cover" />;
+};
 
 export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }) => {
   const theme = useTheme();
@@ -162,9 +172,12 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
                   style={[styles.suggestionRow, { borderBottomColor: theme.colors.borderLight }]}
                   onPress={() => handleDestinationSelect(stop)}
                 >
-                  <Text style={[styles.suggestionName, { color: theme.colors.textPrimary }]} numberOfLines={1}>
-                    {modeIcon(stop.mode)} {stop.name}
-                  </Text>
+                  <View style={styles.suggestionTitleRow}>
+                    <ModeIcon mode={stop.mode} />
+                    <Text style={[styles.suggestionName, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+                      {stop.name}
+                    </Text>
+                  </View>
                   <Text style={[styles.suggestionMeta, { color: theme.colors.textSecondary }]} numberOfLines={1}>
                     {modeLabel(stop.mode)} · {stop.lines.join(', ')}
                   </Text>
@@ -239,16 +252,22 @@ const LegRow: React.FC<{ leg: JourneyLeg }> = ({ leg }) => {
 
   if (leg.type === 'walk') {
     return (
-      <Text style={[styles.legText, { color: theme.colors.textSecondary }]}>
-        🚶 {formatDistance(leg.distanceMeters)} yürü · ~{leg.approxMin} dk
-      </Text>
+      <View style={styles.legRow}>
+        <Text style={styles.walkIcon}>🚶</Text>
+        <Text style={[styles.legText, { color: theme.colors.textSecondary }]}>
+          {formatDistance(leg.distanceMeters)} yürü · ~{leg.approxMin} dk
+        </Text>
+      </View>
     );
   }
 
   return (
-    <Text style={[styles.legText, { color: theme.colors.textPrimary }]}>
-      {modeIcon(leg.mode)} {leg.line} · {leg.numStops} durak · {leg.fromStop.name} → {leg.toStop.name} · ~{leg.approxMin} dk
-    </Text>
+    <View style={styles.legRow}>
+      <ModeIcon mode={leg.mode} />
+      <Text style={[styles.legText, { color: theme.colors.textPrimary }]}>
+        {leg.line} · {leg.numStops} durak · {leg.fromStop.name} → {leg.toStop.name} · ~{leg.approxMin} dk
+      </Text>
+    </View>
   );
 };
 
@@ -303,7 +322,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 2,
   },
+  suggestionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   suggestionName: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -343,7 +368,25 @@ const styles = StyleSheet.create({
   legs: {
     gap: 5,
   },
+  legRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  modeIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    marginTop: 1,
+  },
+  walkIcon: {
+    width: 22,
+    fontSize: 16,
+    lineHeight: 21,
+    textAlign: 'center',
+  },
   legText: {
+    flex: 1,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',

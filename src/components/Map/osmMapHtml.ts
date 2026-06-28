@@ -351,7 +351,35 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
         }
       };
 
-      function renderJourney(journey) {
+      function toLatLngs(coords) {
+        var latLngs = [];
+        for (var c = 0; c < coords.length; c++) {
+          latLngs.push([coords[c].latitude, coords[c].longitude]);
+        }
+        return latLngs;
+      }
+
+      async function roadSnapBusLatLngs(coords) {
+        if (!coords || coords.length < 2) return toLatLngs(coords || []);
+        try {
+          var coordStr = coords
+            .map(function (p) { return p.longitude + ',' + p.latitude; })
+            .join(';');
+          var url = 'https://router.project-osrm.org/route/v1/driving/' +
+            coordStr +
+            '?overview=full&geometries=geojson&continue_straight=false';
+          var response = await fetch(url);
+          if (!response.ok) return toLatLngs(coords);
+          var data = await response.json();
+          var geometry = data && data.routes && data.routes[0] && data.routes[0].geometry;
+          if (!geometry || !geometry.coordinates || geometry.coordinates.length < 2) return toLatLngs(coords);
+          return geometry.coordinates.map(function (p) { return [p[1], p[0]]; });
+        } catch (e) {
+          return toLatLngs(coords);
+        }
+      }
+
+      async function renderJourney(journey) {
         journeyLayer.clearLayers();
         if (!journey || !journey.legs) return;
 
@@ -361,15 +389,17 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
           var coords = leg.coordinates || [];
           if (coords.length < 2) continue;
 
-          var latLngs = [];
-          for (var c = 0; c < coords.length; c++) {
-            latLngs.push([coords[c].latitude, coords[c].longitude]);
-            bounds.push([coords[c].latitude, coords[c].longitude]);
+          var latLngs = leg.type === 'transit' && leg.mode === 'bus'
+            ? await roadSnapBusLatLngs(coords)
+            : toLatLngs(coords);
+
+          for (var c = 0; c < latLngs.length; c++) {
+            bounds.push(latLngs[c]);
           }
 
           var color = '#111827';
           if (leg.type === 'transit') {
-            color = leg.mode === 'bus' ? '#007AFF' : (leg.mode === 'tram' ? '#E11D48' : '#E11D2A');
+            color = '#22C55E';
           }
 
           L.polyline(latLngs, {

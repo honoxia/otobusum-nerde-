@@ -1,0 +1,149 @@
+{
+  "meta": {
+    "source": "https://www.estram.com.tr/hareket-saatleri.php?cat_icerik=4",
+    "season": "yaz",
+    "fetchedAt": "2026-06-28",
+    "note": "ESTRAM mevsimsel tarife. Turkiye saat degistirmez (UTC+3 sabit); kisin kalkis saatleri degisir, yeniden OCR gerekir. routes alani OCR ile doldurulacak."
+  },
+  "sources": [
+    {
+      "id": "862",
+      "name": "OTOGAR - SSK",
+      "image": "img_icerik/2026/big-862-4-2026-06-26-1782473389.jpg",
+      "date": "4-2026-06-26-1782473389"
+    },
+    {
+      "id": "861",
+      "name": "SSK - OTOGAR",
+      "image": "img_icerik/2026/big-861-4-2026-06-26-1782473362.jpg",
+      "date": "4-2026-06-26-1782473362"
+    },
+    {
+      "id": "860",
+      "name": "OGÜ - SSK",
+      "image": "img_icerik/2026/big-860-4-2026-06-26-1782473339.jpg",
+      "date": "4-2026-06-26-1782473339"
+    },
+    {
+      "id": "859",
+      "name": "SSK - OGÜ",
+      "image": "img_icerik/2026/big-859-4-2026-06-26-1782473313.jpg",
+      "date": "4-2026-06-26-1782473313"
+    },
+    {
+      "id": "858",
+      "name": "OTOGAR - OGÜ",
+      "image": "img_icerik/2026/big-858-4-2026-06-26-1782473282.jpg",
+      "date": "4-2026-06-26-1782473282"
+    },
+    {
+      "id": "857",
+      "name": "OGÜ - OTOGAR",
+      "image": "img_icerik/2026/big-857-4-2026-06-26-1782473256.jpg",
+      "date": "4-2026-06-26-1782473256"
+    },
+    {
+      "id": "856",
+      "name": "ÞEHÝR HASTANESÝ - KUMLUBEL",
+      "image": "img_icerik/2026/big-856-4-2026-06-26-1782473228.jpg",
+      "date": "4-2026-06-26-1782473228"
+    },
+    {
+      "id": "855",
+      "name": "KUMLUBEL - ÞEHÝR HASTANESÝ",
+      "image": "img_icerik/2026/big-855-4-2026-06-26-1782473199.jpg",
+      "date": "4-2026-06-26-1782473199"
+    },
+    {
+      "id": "854",
+      "name": "75.YIL - OGÜ",
+      "image": "img_icerik/2026/big-854-4-2026-06-26-1782473177.jpg",
+      "date": "4-2026-06-26-1782473177"
+    },
+    {
+      "id": "853",
+      "name": "OGÜ - 75.YIL",
+      "image": "img_icerik/2026/big-853-4-2026-06-26-1782473148.jpg",
+      "date": "4-2026-06-26-1782473148"
+    },
+    {
+      "id": "852",
+      "name": "ÇANKAYA - OGÜ",
+      "image": "img_icerik/2026/big-852-4-2026-06-26-1782473120.jpg",
+      "date": "4-2026-06-26-1782473120"
+    },
+    {
+      "id": "851",
+      "name": "OGÜ - ÇANKAYA",
+      "image": "img_icerik/2026/big-851-4-2026-06-26-1782473101.jpg",
+      "date": "4-2026-06-26-1782473101"
+    },
+    {
+      "id": "850",
+      "name": "BATIKENT - SSK",
+      "image": "img_icerik/2026/big-850-4-2026-06-26-1782473078.jpg",
+      "date": "4-2026-06-26-1782473078"
+    },
+    {
+      "id": "849",
+      "name": "SSK - BATIKENT",
+      "image": "img_icerik/2026/big-849-4-2026-06-26-1782473058.jpg",
+      "date": "4-2026-06-26-1782473058"
+    },
+    {
+      "id": "848",
+      "name": "ÇAMLICA - SSK",
+      "image": "img_icerik/2026/big-848-4-2026-06-26-1782473039.jpg",
+      "date": "4-2026-06-26-1782473039"
+    },
+    {
+      "id": "847",
+      "name": "SSK - ÇAMLICA",
+      "image": "img_icerik/2026/big-847-4-2026-06-26-1782473022.jpg",
+      "date": "4-2026-06-26-1782473022"
+    },
+    {
+      "id": "846",
+      "name": "OTOGAR - Opera - OGÜ",
+      "image": "img_icerik/2026/big-846-4-2026-06-26-1782472998.jpg",
+      "date": "4-2026-06-26-1782472998"
+    },
+    {
+      "id": "845",
+      "name": "OGÜ - Opera - OTOGAR",
+      "image": "img_icerik/2026/big-845-4-2026-06-26-1782472975.jpg",
+      "date": "4-2026-06-26-1782472975"
+    },
+    {
+      "id": "844",
+      "name": "ES-ES - OTOGAR",
+      "image": "img_icerik/2026/big-844-4-2026-06-26-1782472949.jpg",
+      "date": "4-2026-06-26-1782472949"
+    },
+    {
+      "id": "843",
+      "name": "ES-ES - SSK",
+      "image": "img_icerik/2026/big-843-4-2026-06-26-1782472926.jpg",
+      "date": "4-2026-06-26-1782472926"
+    },
+    {
+      "id": "842",
+      "name": "ES-ES - OGÜ",
+      "image": "img_icerik/2026/big-842-4-2026-06-26-1782472899.jpg",
+      "date": "4-2026-06-26-1782472899"
+    },
+    {
+      "id": "841",
+      "name": "ES-ES - ÞEHÝR HASTANESÝ",
+      "image": "img_icerik/2026/big-841-4-2026-06-26-1782472867.jpg",
+      "date": "4-2026-06-26-1782472867"
+    },
+    {
+      "id": "840",
+      "name": "ES-ES - Opera - KUMLUBEL",
+      "image": "img_icerik/2026/big-840-4-2026-06-26-1782472838.jpg",
+      "date": "4-2026-06-26-1782472838"
+    }
+  ],
+  "routes": {}
+}
