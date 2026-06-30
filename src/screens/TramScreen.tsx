@@ -24,8 +24,13 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
   const network = useMemo(() => tramService.getNetwork(), []);
   const nearestStop = useMemo(() => {
     if (!location) return null;
-    return tramService.findNearestTramStop(location);
+    return tramService.getUpcomingArrivalsForNearestStop(location);
   }, [location]);
+  const visibleLines = useMemo(() => {
+    if (!nearestStop?.stop.lines.length) return network.lines;
+
+    return network.lines.filter((line) => nearestStop.stop.lines.includes(line.ref));
+  }, [nearestStop, network.lines]);
 
   const pushMapData = useCallback(() => {
     const payload = JSON.stringify({
@@ -53,7 +58,7 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-      <ScreenHeader title="Tramvay" subtitle="Statik hatlar ve en yakın durak" onBack={onBack} />
+      <ScreenHeader title="Tramvay" subtitle="Yaz tarifesine göre yaklaşan seferler" onBack={onBack} />
 
       <View style={styles.mapWrap}>
         <WebView
@@ -86,17 +91,45 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
               <Text style={[styles.cardText, { color: theme.colors.textSecondary }]}>
                 {formatDistance(nearestStop.distance)} · Hatlar: {nearestStop.stop.lines.join(', ')}
               </Text>
+
+              {nearestStop.arrivals.length > 0 ? (
+                <View style={styles.arrivalList}>
+                  {nearestStop.arrivals.map((arrival) => (
+                    <View
+                      key={`${arrival.routeId}-${arrival.arrivalTime}-${arrival.etaMinutes}`}
+                      style={[styles.arrivalRow, { borderColor: theme.colors.borderLight }]}
+                    >
+                      <View style={styles.arrivalMain}>
+                        <Text style={[styles.arrivalRoute, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+                          {arrival.routeName}
+                        </Text>
+                        <Text style={[styles.arrivalMeta, { color: theme.colors.textSecondary }]}>
+                          {arrival.lineRef} · {arrival.arrivalTime}
+                        </Text>
+                      </View>
+                      <Text style={[styles.arrivalEta, { color: theme.colors.primary }]}>~{arrival.etaMinutes} dk</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={[styles.cardText, { color: theme.colors.textSecondary }]}>
+                  Bu durak için yaklaşan tarifeli geçiş bulunamadı.
+                </Text>
+              )}
             </>
           ) : (
             <Text style={[styles.cardText, { color: theme.colors.textSecondary }]}>Yakın durak hesaplanamadı.</Text>
           )}
           <Text style={[styles.note, { color: theme.colors.textTertiary }]}>
-            Tramvay için canlı sefer saati yok; bilgiler statik hat verisinden gösterilir.
+            Canlı araç konumu yok; geçişler yaz tarifesi ve ray mesafesine göre tahmin edilir.
           </Text>
         </View>
 
         <View style={styles.lineList}>
-          {network.lines.map((line) => (
+          <Text style={[styles.listTitle, { color: theme.colors.textPrimary }]}>
+            {nearestStop ? `${nearestStop.stop.name} durağından geçen hatlar` : 'Tramvay hatları'}
+          </Text>
+          {visibleLines.map((line) => (
             <View
               key={line.id}
               style={[styles.lineRow, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}
@@ -131,7 +164,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
   },
   panel: {
-    maxHeight: 330,
+    maxHeight: 390,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
   },
@@ -163,6 +196,38 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: '600',
   },
+  arrivalList: {
+    gap: 6,
+    marginTop: 4,
+  },
+  arrivalRow: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  arrivalMain: {
+    flex: 1,
+    gap: 2,
+  },
+  arrivalRoute: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  arrivalMeta: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  arrivalEta: {
+    width: 58,
+    textAlign: 'right',
+    fontSize: 14,
+    fontWeight: '900',
+  },
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -170,6 +235,10 @@ const styles = StyleSheet.create({
   },
   lineList: {
     gap: 8,
+  },
+  listTitle: {
+    fontSize: 14,
+    fontWeight: '900',
   },
   lineRow: {
     flexDirection: 'row',
