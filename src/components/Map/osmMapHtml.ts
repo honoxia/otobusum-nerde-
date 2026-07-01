@@ -44,9 +44,12 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       border-radius: 14px;
       padding: 2px 6px;
       min-width: 22px;
+      min-height: 18px;
+      line-height: 18px;
       text-align: center;
       box-shadow: 0 1px 3px rgba(0,0,0,0.4);
       white-space: nowrap;
+      transform: translate(-50%, -50%);
     }
     .dolmus-stop {
       background: #E11D2A;
@@ -124,6 +127,9 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       var journeyLayer = L.layerGroup().addTo(map);
       var hasZoomedToUser = false;
       var tramsRendered = false;
+
+      map.createPane('busPane');
+      map.getPane('busPane').style.zIndex = 680;
 
       map.on('click', function (e) {
         post({
@@ -249,12 +255,18 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
         for (var i = 0; i < buses.length; i++) {
           var bus = buses[i];
           if (!bus.line || bus.line === 'Unknown') continue;
+          if (!bus.coordinates || !isFinite(bus.coordinates.latitude) || !isFinite(bus.coordinates.longitude)) continue;
           var icon = L.divIcon({
             className: '',
             html: '<div class="bus-marker">' + escapeHtml(bus.line) + '</div>',
-            iconSize: null
+            iconSize: [1, 1],
+            iconAnchor: [0, 0]
           });
-          var marker = L.marker([bus.coordinates.latitude, bus.coordinates.longitude], { icon: icon });
+          var marker = L.marker([bus.coordinates.latitude, bus.coordinates.longitude], {
+            icon: icon,
+            pane: 'busPane',
+            zIndexOffset: 1000
+          });
           (function (deviceId) {
             marker.on('click', function () {
               post({ type: 'busPress', deviceId: deviceId });

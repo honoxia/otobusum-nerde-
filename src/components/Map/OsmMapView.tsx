@@ -31,6 +31,7 @@ export const OsmMapView: React.FC<OsmMapViewProps> = ({
   onError,
 }) => {
   const webViewRef = useRef<WebView>(null);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   // HTML yalnızca bir kez üretilir (Leaflet inline gömülü)
@@ -56,7 +57,23 @@ export const OsmMapView: React.FC<OsmMapViewProps> = ({
 
   // Harita hazır olduğunda veya veri değiştiğinde tekrar gönder
   useEffect(() => {
-    if (isReady) pushData();
+    if (!isReady) return;
+
+    if (pushTimerRef.current) {
+      clearTimeout(pushTimerRef.current);
+    }
+
+    pushTimerRef.current = setTimeout(() => {
+      pushTimerRef.current = null;
+      pushData();
+    }, 150);
+
+    return () => {
+      if (pushTimerRef.current) {
+        clearTimeout(pushTimerRef.current);
+        pushTimerRef.current = null;
+      }
+    };
   }, [isReady, pushData]);
 
   const handleMessage = useCallback(

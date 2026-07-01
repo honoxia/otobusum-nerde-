@@ -16,11 +16,13 @@ const BusMarkerComponent: React.FC<BusMarkerProps> = ({ bus, onPress, isSelected
 
   useEffect(() => {
     // İlk render'dan sonra tracking'i kapat (performans için)
+    setTracksChanges(true);
+
     const timer = setTimeout(() => {
       setTracksChanges(false);
     }, 500);
     return () => clearTimeout(timer);
-  }, []);
+  }, [bus.coordinates.latitude, bus.coordinates.longitude, bus.line]);
 
   // Unknown hatları gösterme
   if (bus.line === 'Unknown') return null;
