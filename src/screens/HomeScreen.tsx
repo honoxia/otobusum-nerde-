@@ -18,17 +18,20 @@ interface HomeScreenProps {
 
 type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
+// Material 3 ikincil kap renkleri (aktif tab) — tasarıma özel, temada yok
+const ACTIVE_TAB_BG = '#3131C0';
+const ACTIVE_TAB_FG = '#B0B2FF';
+
 const MENU_ITEMS: Array<{
   key: Exclude<AppScreen, 'home'>;
   title: string;
-  subtitle: string;
   icon: IconName;
-  accent: 'primary' | 'success' | 'warning' | 'info';
+  twoLine?: boolean;
 }> = [
-  { key: 'bus', title: 'Otobüs', subtitle: 'Canlı varış · ETA', icon: 'directions-bus', accent: 'primary' },
-  { key: 'tram', title: 'Tramvay', subtitle: 'ESTRAM hatları', icon: 'tram', accent: 'success' },
-  { key: 'dolmus', title: 'Dolmuş', subtitle: 'Güzergah & saat', icon: 'local-taxi', accent: 'warning' },
-  { key: 'route', title: 'Güzergah Planla', subtitle: "A'dan B'ye rota", icon: 'alt-route', accent: 'info' },
+  { key: 'bus', title: 'Otobüs', icon: 'directions-bus' },
+  { key: 'tram', title: 'Tramvay', icon: 'tram' },
+  { key: 'dolmus', title: 'Dolmuş', icon: 'airport-shuttle' },
+  { key: 'route', title: 'Güzergah\nPlanla', icon: 'route', twoLine: true },
 ];
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelect }) => {
@@ -38,54 +41,58 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelect }) => {
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
       <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+
+      {/* Üst app bar */}
+      <View style={styles.topBar}>
+        <View style={styles.iconBtn}>
+          <MaterialIcons name="menu" size={24} color={c.textSecondary} />
+        </View>
+        <Text style={[styles.brand, { color: c.primaryLight }]}>ESULAŞ</Text>
+        <View style={styles.iconBtn}>
+          <MaterialIcons name="accessibility-new" size={24} color={c.primaryLight} />
+        </View>
+      </View>
+
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Başlık */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <View style={styles.locationRow}>
-              <MaterialIcons name="location-on" size={16} color={c.primary} />
-              <Text style={[styles.locationText, { color: c.textSecondary }]}>Eskişehir · Odunpazarı</Text>
-            </View>
-            <Text style={[styles.title, { color: c.textPrimary }]}>Nereye{'\n'}gidiyorsun?</Text>
-          </View>
-          <View style={[styles.avatar, { backgroundColor: c.surfaceSecondary }]}>
-            <MaterialIcons name="person" size={24} color={c.textSecondary} />
-          </View>
+        {/* Karşılama */}
+        <View style={styles.welcome}>
+          <Text style={[styles.h2, { color: c.textPrimary }]}>Nereye gitmek istersiniz?</Text>
+          <Text style={[styles.sub, { color: c.textSecondary }]}>Size en uygun ulaşım aracını seçin.</Text>
         </View>
 
-        {/* Arama pill (otobüs aramaya götürür) */}
-        <TouchableOpacity
-          style={[styles.searchPill, { backgroundColor: c.surface, borderColor: c.border }]}
-          activeOpacity={0.8}
-          onPress={() => onSelect('bus')}
-        >
-          <MaterialIcons name="search" size={22} color={c.textTertiary} />
-          <Text style={[styles.searchText, { color: c.textTertiary }]}>Hat, durak veya adres ara</Text>
-        </TouchableOpacity>
-
-        {/* 2x2 kart grid */}
+        {/* 2x2 grid */}
         <View style={styles.grid}>
-          {MENU_ITEMS.map((item) => {
-            const accent = c[item.accent];
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}
-                onPress={() => onSelect(item.key)}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.iconTile, { backgroundColor: accent + '29' }]}>
-                  <MaterialIcons name={item.icon} size={30} color={accent} />
-                </View>
-                <View>
-                  <Text style={[styles.cardTitle, { color: c.textPrimary }]}>{item.title}</Text>
-                  <Text style={[styles.cardSubtitle, { color: c.textSecondary }]}>{item.subtitle}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+          {MENU_ITEMS.map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              style={[styles.card, { backgroundColor: c.surfaceSecondary }]}
+              onPress={() => onSelect(item.key)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.badge}>
+                <MaterialIcons name={item.icon} size={36} color={c.primaryLight} />
+              </View>
+              <Text style={[styles.cardLabel, { color: c.textPrimary }]}>{item.title}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </ScrollView>
+
+      {/* Alt tab bar */}
+      <View style={[styles.bottomNav, { backgroundColor: c.surface, borderTopColor: c.divider }]}>
+        <View style={[styles.tab, styles.tabActive, { backgroundColor: ACTIVE_TAB_BG }]}>
+          <MaterialIcons name="home" size={22} color={ACTIVE_TAB_FG} />
+          <Text style={[styles.tabLabel, { color: ACTIVE_TAB_FG }]}>Ana Sayfa</Text>
+        </View>
+        <View style={styles.tab}>
+          <MaterialIcons name="star-outline" size={22} color={c.textTertiary} />
+          <Text style={[styles.tabLabel, { color: c.textTertiary }]}>Sık Kullanılanlar</Text>
+        </View>
+        <View style={styles.tab}>
+          <MaterialIcons name="notifications-none" size={22} color={c.textTertiary} />
+          <Text style={[styles.tabLabel, { color: c.textTertiary }]}>Bildirimler</Text>
+        </View>
+      </View>
     </View>
   );
 };
@@ -94,79 +101,94 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    paddingTop: 60,
+  topBar: {
+    paddingTop: 52,
     paddingHorizontal: 20,
-    paddingBottom: 32,
-    gap: 24,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  locationRow: {
+    height: 96,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
   },
-  locationText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  title: {
-    marginTop: 8,
-    fontSize: 26,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    lineHeight: 30,
-  },
-  avatar: {
+  iconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+  brand: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  searchText: {
-    fontSize: 15,
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+    gap: 24,
+  },
+  welcome: {
+    gap: 8,
+  },
+  h2: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '700',
+  },
+  sub: {
+    fontSize: 16,
+    lineHeight: 24,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    gap: 16,
   },
   card: {
     width: '47.5%',
     flexGrow: 1,
-    minHeight: 142,
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 18,
-    justifyContent: 'space-between',
+    aspectRatio: 1,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
   },
-  iconTile: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
+  badge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(79, 70, 229, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+  cardLabel: {
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  cardSubtitle: {
-    marginTop: 3,
-    fontSize: 13,
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+  },
+  tab: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  tabActive: {
+    paddingHorizontal: 18,
+  },
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

@@ -1,75 +1,74 @@
-// Light/Dark renk paletleri — "Eskişehir Ulaşım" tasarım sistemine göre
-// (mor vurgu #8A73FF, koyu mavi-siyah zeminler, yeşil/turuncu/kırmızı durum renkleri)
+// Light/Dark renk paletleri — Stitch "Eskişehir Ulaşım" tasarımı (Material 3, indigo/lavanta)
 
 export const lightColors = {
-  // Primary (mor vurgu — açık zeminde biraz daha koyu ton)
-  primary: '#7458F5',
-  primaryLight: '#8A73FF',
-  primaryDark: '#5B3DF0',
+  // Primary (indigo aksiyon / lavanta vurgu)
+  primary: '#4F46E5',
+  primaryLight: '#6B63F0',
+  primaryDark: '#3323CC',
 
   // Semantic
-  success: '#20B877',
-  warning: '#E8871E',
-  error: '#F0325A',
-  info: '#2E97F0',
+  success: '#1E9E6A',
+  warning: '#B5561E',
+  error: '#B3261E',
+  info: '#4F46E5',
 
   // Background
-  background: '#F4F6FA',
+  background: '#F6F7FC',
   surface: '#FFFFFF',
-  surfaceSecondary: '#E6E8EC',
+  surfaceSecondary: '#ECEEF7',
 
   // Text
-  textPrimary: '#0B0D12',
-  textSecondary: '#656C7A',
-  textTertiary: '#9AA1B0',
+  textPrimary: '#111629',
+  textSecondary: '#464659',
+  textTertiary: '#918FA1',
   textInverse: '#FFFFFF',
 
   // Border
-  border: '#E6E8EC',
-  borderLight: '#EEF0F4',
-  divider: '#E6E8EC',
+  border: '#D9DBE6',
+  borderLight: '#E7E9F2',
+  divider: '#D9DBE6',
 
   // Misc
-  shadow: 'rgba(11, 13, 18, 0.08)',
-  overlay: 'rgba(8, 9, 12, 0.35)',
+  shadow: 'rgba(17, 22, 41, 0.08)',
+  overlay: 'rgba(11, 19, 38, 0.35)',
   transparent: 'transparent',
 
   // Map specific
   map: {
     user: '#3BA9FF',
-    bus: '#7458F5',
-    stop: '#E8871E',
-    nearestStop: '#F0325A',
+    bus: '#4F46E5',
+    stop: '#B5561E',
+    nearestStop: '#B3261E',
   },
 };
 
 export const darkColors = {
-  // Primary (mor vurgu)
-  primary: '#8A73FF',
-  primaryLight: '#A594FF',
-  primaryDark: '#5B3DF0',
+  // Primary — indigo (aksiyon/dolu buton) + lavanta (koyu üzeri vurgu, ikon/başlık)
+  primary: '#4F46E5',
+  primaryLight: '#C3C0FF',
+  primaryDark: '#3323CC',
 
   // Semantic
   success: '#2FD08A',
-  warning: '#FFA23C',
-  error: '#FF5470',
-  info: '#3BA9FF',
+  warning: '#FFB695',
+  error: '#FFB4AB',
+  info: '#C3C0FF',
 
-  // Background (koyu mavi-siyah)
-  background: '#08090C',
-  surface: '#161922',
-  surfaceSecondary: '#1F2430',
+  // Background (koyu lacivert)
+  background: '#0B1326',
+  surface: '#171F33', // surface-container
+  surfaceSecondary: '#222A3D', // surface-container-high (kart)
 
   // Text
-  textPrimary: '#F4F6FA',
-  textSecondary: '#9AA1B0',
-  textTertiary: '#656C7A',
-  textInverse: '#08090C',
+  textPrimary: '#DAE2FD',
+  textSecondary: '#C7C4D8',
+  textTertiary: '#918FA1',
+  textInverse: '#FFFFFF',
 
   // Border
-  border: '#1F2430',
-  borderLight: '#2A3040',
-  divider: '#1F2430',
+  border: '#464555', // outline-variant
+  borderLight: '#2D3449', // surface-variant
+  divider: '#2D3449',
 
   // Misc
   shadow: 'rgba(0, 0, 0, 0.5)',
@@ -79,9 +78,9 @@ export const darkColors = {
   // Map specific
   map: {
     user: '#3BA9FF',
-    bus: '#8A73FF',
-    stop: '#FFA23C',
-    nearestStop: '#FF5470',
+    bus: '#4F46E5',
+    stop: '#FFB695',
+    nearestStop: '#FFB4AB',
   },
 };
 
