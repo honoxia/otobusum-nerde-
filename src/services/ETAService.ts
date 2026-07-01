@@ -12,9 +12,10 @@ const DEFAULT_BUS_SPEED_KMH = config.app.defaultBusSpeedKmh;
 const STOP_DELAY_SECONDS = 25; // Her durak için ortalama bekleme süresi (saniye)
 const ROAD_DISTANCE_FACTOR = 1.25; // Kuş uçuşu -> gerçek yol mesafe düzeltme faktörü
 const MAX_DISPLAY_ETA_MINUTES = 30;
-// Nimbus tarifeli varışlar otoriter kaynak; seyrek hatlarda 30 dk'lık sınır
-// gerçek varışları gizliyordu. Tarifeli veriye daha geniş bir pencere tanınır.
-const MAX_SCHEDULE_ETA_MINUTES = 90;
+// Nimbus tarifeli varışlar otoriter kaynak; seyrek hatlarda dar sınır gerçek
+// varışları gizliyordu (16M Yaşamkent yönü ~91 dk). Aynı servis penceresini
+// gösterecek kadar geniş, ertesi güne sarkan kayıtları eleyecek kadar dar tut.
+const MAX_SCHEDULE_ETA_MINUTES = 180;
 const NEARBY_LINE_STOP_CANDIDATE_METERS = 250;
 
 /**
@@ -404,6 +405,19 @@ class ETAService {
   }
 
   /**
+   * Durak adını "taraf"tan bağımsız temel isme indirger.
+   * "EYÜP SULTAN CAMİ-1" ve "952 EYÜP SULTAN CAMİ-2" -> "EYÜP SULTAN CAMİ"
+   * Böylece aynı durağın iki yönü eşleştirilir, farklı duraklar dışlanır.
+   */
+  private normalizeStopBase(name: string): string {
+    return name
+      .replace(/^\d+\s+/, '')   // baştaki durak no ("952 ")
+      .replace(/-\d+$/, '')      // sondaki taraf eki ("-1", "-2")
+      .trim()
+      .toUpperCase();
+  }
+
+  /**
    * Aracın durağa yaklaşıp yaklaşmadığını kontrol et
    * Heading (yön açısı) ile durak yönü karşılaştırılır
    */
@@ -501,8 +515,12 @@ class ETAService {
     const nearestStopResult = stopService.findNearestStop(userLocation);
 
     if (nearestStopResult.stop) {
+      // Yalnızca kullanıcının durağının İKİ TARAFINI sorgula (örn. CAMİ-1 + CAMİ-2).
+      // Aynı hattı taşıyan başka yakın duraklar (AKTEPE, PARK WEST) dahil edilirse
+      // aynı araç iki durakta sayılıp "1 dk arayla" sahte varış üretiyordu.
+      const nearestBase = this.normalizeStopBase(nearestStopResult.stop.name);
       const candidateStops = (nearestStopResult.allNearbyStops || [{ stop: nearestStopResult.stop, distance: nearestStopResult.distance }])
-        .filter(item => item.distance <= Math.max(NEARBY_LINE_STOP_CANDIDATE_METERS, nearestStopResult.distance + 75))
+        .filter(item => this.normalizeStopBase(item.stop.name) === nearestBase)
         .filter(item => this.findMatchingLinesAtStop(line, item.stop.lines).length > 0);
 
       const stopsToQuery = candidateStops.length > 0
@@ -542,8 +560,10 @@ class ETAService {
             ...localResult,
             status: 'ok',
             etaMinutes: primary.etaMinutes,
-            stopName: localResult.stopName || nearestStopResult.stop.name,
-            stopId: localResult.stopId || nearestStopResult.stop.id,
+            // Kart, üstteki StopCard ile tutarlı olsun diye hep en yakın durağı gösterir
+            // (aksi halde bir tarafta CAMİ-1, diğerinde CAMİ-2 yazıp kafa karıştırıyordu)
+            stopName: nearestStopResult.stop.name,
+            stopId: nearestStopResult.stop.id,
             line: localResult.line || primary.line,
             direction: primary.direction || localResult.direction,
             errorMessage: undefined, // eski local hata mesajını taşıma
