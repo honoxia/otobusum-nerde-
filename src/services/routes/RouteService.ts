@@ -44,8 +44,23 @@ class RouteService {
   }
 
   private loadRoutes(): void {
+    // Açılışta statik veriyle başla; canlı feed gelince applyRoutesData ile güncellenir
+    this.applyRoutesData(routesData as LineRoutes[], 'statik');
+  }
+
+  /**
+   * Route verisini (statik veya canlı feed) haritalara uygular.
+   * Var olan haritaları temizleyip yeniden kurar; feed güncellemesi için idempotent.
+   */
+  applyRoutesData(data: LineRoutes[], source: string = 'feed'): void {
     try {
-      const data = routesData as LineRoutes[];
+      if (!Array.isArray(data) || data.length === 0) {
+        devLog(`[RouteService] ${source} veri boş, güncelleme atlandı`);
+        return;
+      }
+
+      this.lineRoutesMap.clear();
+      this.stopRouteMap.clear();
 
       // Hat -> Routes map
       data.forEach(item => {
@@ -66,7 +81,7 @@ class RouteService {
         });
       });
 
-      devLog(`[RouteService] ${data.length} hat, ${this.stopRouteMap.size} durak-route eşleştirmesi yüklendi`);
+      devLog(`[RouteService] ${data.length} hat, ${this.stopRouteMap.size} durak-route eşleştirmesi yüklendi (${source})`);
     } catch (error) {
       console.error('[RouteService] Route verileri yüklenemedi:', error);
     }

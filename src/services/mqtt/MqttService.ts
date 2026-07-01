@@ -11,6 +11,8 @@ import { BusPosition } from '../../types/shared-types';
 import routesData from '../../data/routes-data.json';
 import { config } from '../../config';
 import nimbusService from '../NimbusService';
+import routeService from '../routes/RouteService';
+import { buildRoutesFromFeed, LineRoutesData } from '../../utils/buildRoutesFromFeed';
 import { devLog, devWarn } from '../../utils/devLog';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -46,19 +48,26 @@ class MqttService {
   private nameCache: Map<string, string> = new Map();
   // Route ID -> Line mapping
   private routeIdToLine: Map<number, RouteMapping> = new Map();
+  // Canlı feed'den route mapping bir kez uygulandı mı?
+  private feedRoutesApplied = false;
 
   constructor() {
-    this.buildRouteMapping();
+    // Açılışta statik veriyle başla; canlı feed gelince applyFeedRoutes ile güncellenir
+    this.rebuildRouteMapping(routesData as LineRoutesData[], 'statik');
   }
 
   /**
-   * routes-data.json'dan routeId -> line mapping oluştur
+   * LineRoutesData[] (statik veya canlı feed) -> routeId -> line mapping kur.
+   * Var olan haritayı temizleyip yeniden kurar; feed güncellemesi için idempotent.
    */
-  private buildRouteMapping(): void {
+  private rebuildRouteMapping(data: LineRoutesData[], source: string = 'feed'): void {
     try {
+      if (!Array.isArray(data) || data.length === 0) return;
+
+      this.routeIdToLine.clear();
       let count = 0;
-      (routesData as any[]).forEach(item => {
-        item.routes?.forEach((route: any) => {
+      data.forEach(item => {
+        item.routes?.forEach(route => {
           if (route.routeId) {
             this.routeIdToLine.set(route.routeId, {
               line: item.line,
@@ -68,16 +77,26 @@ class MqttService {
           }
         });
       });
-      devLog(`[MQTT] ✅ Route mapping built: ${count} routes -> ${this.routeIdToLine.size} unique IDs`);
-
-      // Örnek birkaç mapping göster
-      const samples = [...this.routeIdToLine.entries()].slice(0, 5);
-      samples.forEach(([id, info]) => {
-        devLog(`[MQTT]    Route ${id} -> ${info.line}`);
-      });
+      devLog(`[MQTT] ✅ Route mapping built: ${count} routes -> ${this.routeIdToLine.size} unique IDs (${source})`);
     } catch (error) {
       console.error('[MQTT] ❌ Route mapping build failed:', error);
     }
+  }
+
+  /**
+   * Canlı Nimbus feed'inden route mapping'i (MqttService + RouteService) güncelle.
+   * Feed başarısızsa/boşsa hiçbir şey yapmaz; statik veri devrede kalır.
+   */
+  private applyFeedRoutes(apiData: any): void {
+    if (this.feedRoutesApplied) return;
+
+    const built = buildRoutesFromFeed(apiData);
+    if (!built) return;
+
+    this.rebuildRouteMapping(built, 'canlı feed');
+    routeService.applyRoutesData(built, 'canlı feed');
+    this.feedRoutesApplied = true;
+    devLog(`[MQTT] ✅ Runtime route mapping: canlı feed'den ${built.length} hat güncellendi`);
   }
 
   /**
@@ -134,6 +153,10 @@ class MqttService {
         try {
           const data = JSON.parse(text);
           devWarn(`[NIMBUS] ✅ Parsed JSON! Keys: ${Object.keys(data).join(', ')}`);
+
+          // Canlı feed'de "routes" varsa route mapping'i güncelle (self-healing)
+          // Not: bu veri zaten isim çekmek için indiriliyor; ek ağ maliyeti yok.
+          this.applyFeedRoutes(data);
 
           // units array
           if (data.units && Array.isArray(data.units)) {
