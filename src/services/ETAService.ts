@@ -11,6 +11,8 @@ const DEFAULT_BUS_SPEED_KMH = config.app.defaultBusSpeedKmh;
 // ETA hesaplama sabitleri
 const STOP_DELAY_SECONDS = 25; // Her durak için ortalama bekleme süresi (saniye)
 const ROAD_DISTANCE_FACTOR = 1.25; // Kuş uçuşu -> gerçek yol mesafe düzeltme faktörü
+const MAX_DISPLAY_ETA_MINUTES = 30;
+const NEARBY_LINE_STOP_CANDIDATE_METERS = 250;
 
 /**
  * ETA Service - Durak bazlı ETA hesaplaması yapar
@@ -68,7 +70,8 @@ class ETAService {
   calculateETA(
     userLocation: Coordinates,
     line: string,
-    vehicles: BusPosition[]
+    vehicles: BusPosition[],
+    preferredDirectionFull?: string | null
   ): ETAResult {
     devLog('');
     devLog('🔍 ═══ ETA DEBUG (DURAK BAZLI) ═══');
@@ -113,14 +116,29 @@ class ETAService {
     const normalizedQuery = line.toUpperCase().trim();
     const lineVehicles = vehicles.filter(v => {
       const vehicleLine = (v.line || '').toUpperCase().trim();
+      const routeInfo = v.routeId ? routeService.getRouteInfo(v.routeId) : null;
+      const routeLine = (routeInfo?.line || '').toUpperCase().trim();
+      const candidateLines = [vehicleLine, routeLine].filter(Boolean);
       // Araç hattı, eşleşen hatlardan biri mi?
       // Veya sorgu ile başlıyor mu? (16 sorgusu → 16, 16M, 16S)
-      return matchingLines.some(ml => ml.toUpperCase() === vehicleLine) ||
-             vehicleLine === normalizedQuery ||
-             ((/^\d+$/.test(normalizedQuery)) && vehicleLine.startsWith(normalizedQuery));
+      const lineMatches = candidateLines.some(candidateLine =>
+        matchingLines.some(ml => ml.toUpperCase() === candidateLine) ||
+        candidateLine === normalizedQuery ||
+        this.matchLine(normalizedQuery, candidateLine) ||
+        this.matchLine(candidateLine, normalizedQuery)
+      );
+
+      if (!lineMatches) return false;
+      if (!preferredDirectionFull) return true;
+      if (!v.routeId) return false;
+
+      return routeInfo?.direction === preferredDirectionFull;
     });
 
     devLog(`🔍 🚌 "${line}" hattında araç sayısı: ${lineVehicles.length}`);
+    if (preferredDirectionFull) {
+      devLog(`🔍 🧭 Seçili yön filtresi: ${routeService.formatDirection(preferredDirectionFull)}`);
+    }
 
     if (lineVehicles.length === 0) {
       // Hat geçiyor ama şu an aktif araç yok
@@ -143,22 +161,31 @@ class ETAService {
       };
     }
 
+    const targetStopCandidates = (nearestStopResult.allNearbyStops || [{ stop: targetStop, distance: nearestStopResult.distance }])
+      .filter(item => item.distance <= Math.max(NEARBY_LINE_STOP_CANDIDATE_METERS, nearestStopResult.distance + 75))
+      .filter(item => this.findMatchingLinesAtStop(line, item.stop.lines).length > 0);
+    const lineStopCandidates = targetStopCandidates.length > 0
+      ? targetStopCandidates
+      : [{ stop: targetStop, distance: nearestStopResult.distance }];
+
+    devLog(
+      `🔍 🚏 Yakın aday duraklar: ${lineStopCandidates
+        .map(item => `${item.stop.name} (${Math.round(item.distance)}m)`)
+        .join(', ')}`
+    );
+
     // 4. Durağa en yakın ve YAKLAŞAN aracı bul
-    // Hedef durağın Wialon ID'si
-    const targetWialonId = this.extractWialonId(targetStop.id);
     const stopsCoordMap = stopService.getStopCoordinatesMap();
 
     const vehiclesWithDistance = lineVehicles
       .map(vehicle => {
-        const distanceToStop = calculateHaversineDistance(vehicle.coordinates, targetStop.coordinates);
-        // Aracın durağa yaklaşıp yaklaşmadığını kontrol et (heading bazlı)
-        const isApproaching = this.isVehicleApproachingStop(vehicle, targetStop.coordinates);
-
         // ÖNEMLİ: Aracın rotası bu durağa uğruyor mu?
         let willStopHere = true; // Varsayılan: route ID yoksa heading'e güven
         let vehicleNearestStopId: number | null = null;
+        let selectedTargetStop = lineStopCandidates[0].stop;
+        let selectedTargetWialonId = this.extractWialonId(selectedTargetStop.id);
 
-        if (vehicle.routeId && targetWialonId) {
+        if (vehicle.routeId) {
           // Aracın şu anki en yakın durağını bul (rota üzerinde)
           vehicleNearestStopId = routeService.findNearestStopOnRoute(
             vehicle.routeId,
@@ -166,17 +193,31 @@ class ETAService {
             stopsCoordMap
           );
 
-          // Bu rota hedef durağa uğruyor mu ve araç henüz geçmedi mi?
-          willStopHere = routeService.isStopOnRouteAhead(
-            vehicle.routeId,
-            targetWialonId,
-            vehicleNearestStopId
-          );
+          const matchingCandidate = lineStopCandidates.find(candidate => {
+            const candidateWialonId = this.extractWialonId(candidate.stop.id);
+            return candidateWialonId
+              ? routeService.isStopOnRouteAhead(vehicle.routeId!, candidateWialonId, vehicleNearestStopId)
+              : false;
+          });
+
+          if (matchingCandidate) {
+            selectedTargetStop = matchingCandidate.stop;
+            selectedTargetWialonId = this.extractWialonId(selectedTargetStop.id);
+            willStopHere = true;
+          } else {
+            willStopHere = false;
+          }
 
           if (!willStopHere) {
             devLog(`🔍 ⚠️ Araç ${vehicle.line} (Route ${vehicle.routeId}) bu durağa UĞRAMAYACAK`);
+          } else if (selectedTargetStop.id !== targetStop.id) {
+            devLog(`🔍 🔄 Araç ${vehicle.line} için yön durağı seçildi: ${selectedTargetStop.name}`);
           }
         }
+
+        const distanceToStop = calculateHaversineDistance(vehicle.coordinates, selectedTargetStop.coordinates);
+        // Aracın durağa yaklaşıp yaklaşmadığını kontrol et (heading bazlı)
+        const isApproaching = this.isVehicleApproachingStop(vehicle, selectedTargetStop.coordinates);
 
         return {
           vehicle,
@@ -184,6 +225,8 @@ class ETAService {
           isApproaching,
           willStopHere,
           vehicleNearestStopId,
+          targetStop: selectedTargetStop,
+          targetWialonId: selectedTargetWialonId,
         };
       })
       // Sadece bu durağa uğrayacak araçları al
@@ -218,8 +261,11 @@ class ETAService {
     devLog(`🔍 🚌 Yaklaşıyor mu: ${nearest.isApproaching ? 'EVET ✅' : 'HAYIR ❌ (ters yönde)'}`);
     devLog(`🔍 🚌 Yaklaşan araç sayısı: ${approachingVehicles.length}/${vehiclesWithDistance.length}`);
 
-    // Eğer hiç yaklaşan araç yoksa
-    if (!nearest.isApproaching) {
+    const routeVerifiedTarget = Boolean(nearest.vehicle.routeId && nearest.targetWialonId);
+
+    // Route ID yoksa heading'e mahkumuz; route ID varsa "durak ileride mi?" kontrolü
+    // daha güvenilir olduğu için heading'i sadece sıralama sinyali olarak kullanırız.
+    if (!nearest.isApproaching && !routeVerifiedTarget) {
       devLog('🔍 ═══════════════');
       return {
         status: 'no_vehicle_approaching',
@@ -228,6 +274,8 @@ class ETAService {
         stopId: targetStop.id,
         errorMessage: `${line} hattında şu anda durağa yaklaşan araç yok (${vehiclesWithDistance.length} araç ters yönde).`,
       };
+    } else if (!nearest.isApproaching && routeVerifiedTarget) {
+      devLog('🔍 🧭 Heading ters görünüyor ama Route ID hedef durağı doğruladı; ETA hesaplanıyor');
     }
 
     // 5. ETA hesapla — rota üzerinden mesafe + STABİL hız
@@ -238,11 +286,11 @@ class ETAService {
 
     // Mesafe: mümkünse rota üzerinden (duraktan durağa), değilse kuş uçuşu x1.25
     const routeDistance =
-      nearest.vehicle.routeId && targetWialonId && nearest.vehicleNearestStopId
+      nearest.vehicle.routeId && nearest.targetWialonId && nearest.vehicleNearestStopId
         ? routeService.getRouteDistanceMeters(
             nearest.vehicle.routeId,
             nearest.vehicleNearestStopId,
-            targetWialonId,
+            nearest.targetWialonId,
             stopsCoordMap
           )
         : null;
@@ -267,11 +315,11 @@ class ETAService {
 
     // Aradaki duraklarda bekleme süresi
     let stopsBetween = 0;
-    if (nearest.vehicle.routeId && targetWialonId && nearest.vehicleNearestStopId) {
+    if (nearest.vehicle.routeId && nearest.targetWialonId && nearest.vehicleNearestStopId) {
       const stopsCount = routeService.getStopsBetween(
         nearest.vehicle.routeId,
         nearest.vehicleNearestStopId,
-        targetWialonId
+        nearest.targetWialonId
       );
 
       if (stopsCount !== null && stopsCount > 0) {
@@ -286,12 +334,12 @@ class ETAService {
 
     devLog(`🔍 ⏱️ Hız: ${speedKmh} km/h (stabil), Mesafe: ${Math.round(effectiveDistance)}m (${distanceSource}), ETA: ${etaMinutes} dk`);
 
-    if (etaMinutes > 30) {
+    if (etaMinutes > MAX_DISPLAY_ETA_MINUTES) {
       return {
         status: 'no_vehicle_approaching',
         line,
-        stopName: targetStop.name,
-        stopId: targetStop.id,
+        stopName: nearest.targetStop.name,
+        stopId: nearest.targetStop.id,
         errorMessage: `${line} hattında yaklaşan araç görünmüyor (en yakın >30 dk).`,
       };
     }
@@ -312,7 +360,7 @@ class ETAService {
 
     // Route ID yoksa eski yöntemi kullan (durak bazlı - daha az güvenilir)
     if (!direction) {
-      const stopWialonId = this.extractWialonId(targetStop.id);
+      const stopWialonId = this.extractWialonId(nearest.targetStop.id);
       if (stopWialonId) {
         const directionResult = routeService.determineDirection(
           nearest.vehicle.line,
@@ -333,8 +381,8 @@ class ETAService {
     return {
       status: 'ok',
       etaMinutes,
-      stopName: targetStop.name,
-      stopId: targetStop.id,
+      stopName: nearest.targetStop.name,
+      stopId: nearest.targetStop.id,
       line: nearest.vehicle.line, // Gerçek hat adını göster (16M gibi)
       direction,
       directionFull,
@@ -435,10 +483,11 @@ class ETAService {
   async calculateETAWithSchedule(
     userLocation: Coordinates,
     line: string,
-    vehicles: BusPosition[]
+    vehicles: BusPosition[],
+    preferredDirectionFull?: string | null
   ): Promise<ETAResult> {
     // Bizim rota-bazlı hesap: durak çözümü + Nimbus yoksa fallback olarak kullanılır
-    const localResult = this.calculateETA(userLocation, line, vehicles);
+    const localResult = this.calculateETA(userLocation, line, vehicles, preferredDirectionFull);
 
     // Durak çözülebildiyse Nimbus'un kendi ETA'sını BİRİNCİL kaynak olarak dene.
     // Nimbus, gerçek yol geometrisi + geçmiş hız profiliyle hesapladığı için
@@ -448,7 +497,12 @@ class ETAService {
 
       if (stopWialonId) {
         devLog(`🔍 📅 Nimbus ETA (birincil) çekiliyor...`);
-        const scheduledArrivals = await this.getScheduledArrivals(stopWialonId, line);
+        const directionLabel = preferredDirectionFull
+          ? routeService.formatDirection(preferredDirectionFull)
+          : null;
+        const scheduledArrivals = (await this.getScheduledArrivals(stopWialonId, line))
+          .filter(arrival => !directionLabel || arrival.direction === directionLabel)
+          .filter(arrival => arrival.etaMinutes <= MAX_DISPLAY_ETA_MINUTES);
 
         if (scheduledArrivals.length > 0) {
           const primary = scheduledArrivals[0]; // en yakın varış

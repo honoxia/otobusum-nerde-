@@ -26,6 +26,7 @@ import { useStops } from '../hooks/useStops';
 import { useNearestStop } from '../hooks/useNearestStop';
 import { useLiveVehicles } from '../hooks/useLiveVehicles';
 import etaService from '../services/ETAService';
+import routeService, { RouteDirectionOption } from '../services/routes/RouteService';
 import { extractLineNumber } from '../utils/queryParser';
 import { BusStop, ETAResult } from '../types/shared-types';
 import { calculateHaversineDistance } from '../utils/geo.utils';
@@ -57,6 +58,8 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
   const [selectedStop, setSelectedStop] = useState<BusStop | null>(null);
   const [selectedStopDistance, setSelectedStopDistance] = useState(0);
   const [selectedLine, setSelectedLine] = useState<string | null>(null);
+  const [directionOptions, setDirectionOptions] = useState<RouteDirectionOption[]>([]);
+  const [selectedDirectionFull, setSelectedDirectionFull] = useState<string | null>(null);
   const [mapExpanded, setMapExpanded] = useState(false);
 
   const { location, error: locationError, isLoading: locationLoading } = useLocation();
@@ -100,7 +103,7 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
   };
 
   const handleQuery = useCallback(
-    async (text: string) => {
+    async (text: string, directionOverride?: string | null) => {
       if (!location) {
         const msg = 'Konum bilgisi alınamadı.';
         setEtaResult({ status: 'error', errorMessage: msg });
@@ -111,6 +114,8 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
 
       const line = extractLineNumber(text);
       if (!line) {
+        setDirectionOptions([]);
+        setSelectedDirectionFull(null);
         const msg = 'Hat numarası anlaşılamadı.';
         setEtaResult({ status: 'error', errorMessage: msg });
         showToast('error', 'Hata', msg);
@@ -122,8 +127,16 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
       setEtaResult(null);
       setSelectedLine(line);
 
+      const routeOptions = routeService.getRouteOptionsForLine(line);
+      const requestedDirection = directionOverride === undefined ? selectedDirectionFull : directionOverride;
+      const activeDirection = requestedDirection && routeOptions.some(option => option.direction === requestedDirection)
+        ? requestedDirection
+        : null;
+      setDirectionOptions(routeOptions);
+      setSelectedDirectionFull(activeDirection);
+
       try {
-        const result = await etaService.calculateETAWithSchedule(location, line, buses);
+        const result = await etaService.calculateETAWithSchedule(location, line, buses, activeDirection);
         setEtaResult(result);
 
         let speechText = '';
@@ -150,7 +163,7 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
         setLoading(false);
       }
     },
-    [location, buses]
+    [location, buses, selectedDirectionFull]
   );
 
   useEffect(() => {
@@ -207,7 +220,16 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
   const handleLinePress = (line: string) => {
     setQuery(line);
     setSelectedLine(line);
-    handleQuery(line);
+    setSelectedDirectionFull(null);
+    handleQuery(line, null);
+  };
+
+  const handleDirectionPress = (direction: string | null) => {
+    setSelectedDirectionFull(direction);
+    const text = query.trim() || selectedLine || '';
+    if (text) {
+      handleQuery(text, direction);
+    }
   };
 
   const handleStopPress = (stop: BusStop) => {
@@ -283,6 +305,59 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
                   : 'Bağlantı yok'}
             </Text>
           </View>
+
+          {selectedLine && directionOptions.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.directionRow}>
+              <TouchableOpacity
+                style={[
+                  styles.directionChip,
+                  {
+                    backgroundColor: selectedDirectionFull === null ? theme.colors.primary : theme.colors.surface,
+                    borderColor: selectedDirectionFull === null ? theme.colors.primary : theme.colors.border,
+                  },
+                ]}
+                onPress={() => handleDirectionPress(null)}
+                disabled={loading}
+              >
+                <Text
+                  style={[
+                    styles.directionChipText,
+                    { color: selectedDirectionFull === null ? '#fff' : theme.colors.textSecondary },
+                  ]}
+                >
+                  Tüm yönler
+                </Text>
+              </TouchableOpacity>
+
+              {directionOptions.map(option => {
+                const active = selectedDirectionFull === option.direction;
+
+                return (
+                  <TouchableOpacity
+                    key={option.routeId}
+                    style={[
+                      styles.directionChip,
+                      {
+                        backgroundColor: active ? theme.colors.primary : theme.colors.surface,
+                        borderColor: active ? theme.colors.primary : theme.colors.border,
+                      },
+                    ]}
+                    onPress={() => handleDirectionPress(option.direction)}
+                    disabled={loading}
+                  >
+                    <Text
+                      style={[
+                        styles.directionChipText,
+                        { color: active ? '#fff' : theme.colors.textSecondary },
+                      ]}
+                    >
+                      {option.line !== selectedLine ? `${option.line} ${option.label}` : option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
 
           {isLoading ? (
             <SkeletonCard />
@@ -434,6 +509,21 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
+  },
+  directionRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  directionChip: {
+    minHeight: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    borderWidth: 1,
+    justifyContent: 'center',
+  },
+  directionChipText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   etaContainer: {
     marginVertical: 4,

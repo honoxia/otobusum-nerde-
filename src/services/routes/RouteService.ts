@@ -20,6 +20,13 @@ interface DirectionResult {
   confidence: 'high' | 'medium' | 'low';
 }
 
+export interface RouteDirectionOption {
+  line: string;
+  routeId: number;
+  direction: string;
+  label: string;
+}
+
 /**
  * Route Service - Hat yön bilgilerini yönetir
  *
@@ -105,6 +112,38 @@ class RouteService {
     }
 
     return routes.map(r => r.direction);
+  }
+
+  getRouteOptionsForLine(line: string): RouteDirectionOption[] {
+    const normalizedLine = line.toUpperCase().trim();
+    const routes = this.lineRoutesMap.get(normalizedLine);
+    if (!routes) {
+      if (/^\d+$/.test(normalizedLine)) {
+        const options: RouteDirectionOption[] = [];
+        this.lineRoutesMap.forEach((variantRoutes, key) => {
+          if (key.startsWith(normalizedLine) && key.length > normalizedLine.length) {
+            variantRoutes.forEach(route => {
+              options.push({
+                line: key,
+                routeId: route.routeId,
+                direction: route.direction,
+                label: this.formatDirection(route.direction),
+              });
+            });
+          }
+        });
+        return options;
+      }
+
+      return [];
+    }
+
+    return routes.map(route => ({
+      line: normalizedLine,
+      routeId: route.routeId,
+      direction: route.direction,
+      label: this.formatDirection(route.direction),
+    }));
   }
 
   /**
