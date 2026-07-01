@@ -14,6 +14,11 @@ interface TramScreenProps {
   onBack: () => void;
 }
 
+const offsetSourceLabels = {
+  measured: 'measured',
+  'fixed-interval': 'fixed-interval',
+} as const;
+
 export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
   const theme = useTheme();
   const webViewRef = useRef<WebView>(null);
@@ -104,7 +109,7 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
                           {arrival.routeName}
                         </Text>
                         <Text style={[styles.arrivalMeta, { color: theme.colors.textSecondary }]}>
-                          {arrival.lineRef} · {arrival.arrivalTime}
+                          {arrival.lineRef} · {arrival.arrivalTime} · {offsetSourceLabels[arrival.offsetSource]}
                         </Text>
                       </View>
                       <Text style={[styles.arrivalEta, { color: theme.colors.primary }]}>~{arrival.etaMinutes} dk</Text>
@@ -121,7 +126,7 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
             <Text style={[styles.cardText, { color: theme.colors.textSecondary }]}>Yakın durak hesaplanamadı.</Text>
           )}
           <Text style={[styles.note, { color: theme.colors.textTertiary }]}>
-            Canlı araç konumu yok; geçişler yaz tarifesi ve ray mesafesine göre tahmin edilir.
+            Canlı araç konumu yok; geçişler yaz tarifesi ve durak sırasına göre tahmin edilir.
           </Text>
         </View>
 

@@ -15,7 +15,10 @@ export interface TramArrivalEstimate {
   etaMinutes: number;
   arrivalTime: string;
   offsetMinutes: number;
+  offsetSource: TramOffsetSource;
 }
+
+export type TramOffsetSource = 'measured' | 'fixed-interval';
 
 interface TramScheduleRoute {
   name: string;
@@ -35,6 +38,11 @@ interface MeasuredRouteOffsetResult {
   offsetMinutes: number | null;
 }
 
+interface TramOffsetEstimate {
+  minutes: number;
+  source: TramOffsetSource;
+}
+
 interface RailEdge {
   to: number;
   meters: number;
@@ -47,8 +55,16 @@ interface RailGraph {
   stopNodeById: Map<string, number>;
 }
 
-const AVERAGE_TRAM_SPEED_KMH = 20;
-const DWELL_MINUTES_PER_STOP = 0.35;
+interface RouteStopDistanceContext {
+  graph: RailGraph;
+  startDistances: number[];
+  endDistances: number[];
+  routeMeters: number;
+  distanceMeters: number;
+  effectiveRouteMeters: number;
+}
+
+const FIXED_INTERVAL_MINUTES_PER_STOP = 2;
 const ROUTE_ON_PATH_TOLERANCE_METERS = 450;
 const SAME_LINE_DETOUR_TOLERANCE_METERS = 1800;
 const DEPARTURE_LOOKBACK_MINUTES = 120;
@@ -145,6 +161,116 @@ const MEASURED_ROUTE_STOP_OFFSETS: Record<string, Record<string, number>> = {
     [normalizeText('Uluönder')]: 15,
     [normalizeText('SSK')]: 21,
   },
+  '851': {
+    [normalizeText('Osmangazi Üniversitesi')]: 0,
+    [normalizeText('Porsuk Spor Salonu')]: 2,
+    [normalizeText('Millet')]: 4,
+    [normalizeText('Halk')]: 6,
+    [normalizeText('Gültepe')]: 9,
+    [normalizeText('İtfaiye')]: 11,
+    [normalizeText('Piri Reis')]: 13,
+    [normalizeText('Yenikent')]: 14,
+    [normalizeText('Kartopu')]: 16,
+    [normalizeText('Plevne')]: 18,
+    [normalizeText('Çankaya')]: 19,
+  },
+  '852': {
+    [normalizeText('Çankaya')]: 0,
+    [normalizeText('Nasrettin Hoca')]: 1,
+    [normalizeText('Yenikent')]: 4,
+    [normalizeText('Piri Reis')]: 5,
+    [normalizeText('İtfaiye')]: 7,
+    [normalizeText('Gültepe')]: 9,
+    [normalizeText('Halk')]: 12,
+    [normalizeText('Millet')]: 14,
+    [normalizeText('Porsuk Spor Salonu')]: 16,
+    [normalizeText('Osmangazi Üniversitesi')]: 18,
+  },
+  '855': {
+    [normalizeText('Tramvay durağı')]: 0,
+    [normalizeText('Sıhhiye')]: 1,
+    [normalizeText('Gaffar Okkan')]: 3,
+    [normalizeText('Büyük Park')]: 5,
+    [normalizeText('Opera')]: 7,
+    [normalizeText('Yıldız')]: 10,
+    [normalizeText('ES-ES (Çarşı)')]: 12,
+    [normalizeText('Belediye')]: 16,
+    [normalizeText('Atatürk Lisesi')]: 18,
+    [normalizeText('Alanönü')]: 19,
+    [normalizeText('Gökmeydan')]: 21,
+    [normalizeText('Odunpazarı Belediyesi')]: 22,
+    [normalizeText('Yunusemre')]: 24,
+    [normalizeText('Yenidoğan')]: 26,
+    [normalizeText('Ertaş')]: 28,
+    [normalizeText('Emek')]: 30,
+    [normalizeText('Tarih Bulvarı')]: 32,
+    [normalizeText('71 Evler')]: 34,
+    [normalizeText('Açelya')]: 36,
+    [normalizeText('Yaşar Kemal')]: 38,
+    [normalizeText('Öykü')]: 39,
+    [normalizeText('Park')]: 41,
+    [normalizeText('Şehir Hastanesi')]: 42,
+  },
+  '856': {
+    [normalizeText('Şehir Hastanesi')]: 0,
+    [normalizeText('Park')]: 1,
+    [normalizeText('Öykü')]: 3,
+    [normalizeText('Yaşar Kemal')]: 4,
+    [normalizeText('Açelya')]: 6,
+    [normalizeText('71 Evler')]: 8,
+    [normalizeText('Tarih Bulvarı')]: 10,
+    [normalizeText('Emek')]: 12,
+    [normalizeText('Ertaş')]: 14,
+    [normalizeText('Yenidoğan')]: 16,
+    [normalizeText('Yunusemre')]: 18,
+    [normalizeText('Odunpazarı Belediyesi')]: 20,
+    [normalizeText('Gökmeydan')]: 21,
+    [normalizeText('Alanönü')]: 23,
+    [normalizeText('Atatürk Lisesi')]: 25,
+    [normalizeText('Belediye')]: 26,
+    [normalizeText('ES-ES (Çarşı)')]: 30,
+    [normalizeText('Yıldız')]: 32,
+    [normalizeText('Mamure')]: 34,
+    [normalizeText('Opera')]: 35,
+    [normalizeText('Büyük Park')]: 37,
+    [normalizeText('Gaffar Okkan')]: 39,
+    [normalizeText('Sıhhiye')]: 41,
+    [normalizeText('Tramvay durağı')]: 42,
+  },
+  '857': {
+    [normalizeText('Osmangazi Üniversitesi')]: 0,
+    [normalizeText('Porsuk Spor Salonu')]: 1,
+    [normalizeText('Büyükdere')]: 3,
+    [normalizeText('Göztepe')]: 5,
+    [normalizeText('Atatürk Bulvarı')]: 7,
+    [normalizeText('Vişnelik')]: 9,
+    [normalizeText('Şehitlik')]: 11,
+    [normalizeText('Belediye')]: 15,
+    [normalizeText('Atatürk Lisesi')]: 18,
+    [normalizeText('Alanönü')]: 20,
+    [normalizeText('Gökmeydan')]: 21,
+    [normalizeText('Odunpazarı Belediyesi')]: 23,
+    [normalizeText('Yunuskent')]: 25,
+    [normalizeText('Borsa')]: 27,
+    [normalizeText('Otogar')]: 29,
+  },
+  '858': {
+    [normalizeText('Otogar')]: 0,
+    [normalizeText('Borsa')]: 2,
+    [normalizeText('Yunuskent')]: 4,
+    [normalizeText('Odunpazarı Belediyesi')]: 6,
+    [normalizeText('Gökmeydan')]: 8,
+    [normalizeText('Alanönü')]: 9,
+    [normalizeText('Atatürk Lisesi')]: 11,
+    [normalizeText('Belediye')]: 14,
+    [normalizeText('Şehitlik')]: 18,
+    [normalizeText('Vişnelik')]: 20,
+    [normalizeText('Atatürk Bulvarı')]: 22,
+    [normalizeText('Göztepe')]: 24,
+    [normalizeText('Büyükdere')]: 26,
+    [normalizeText('Porsuk Spor Salonu')]: 28,
+    [normalizeText('Osmangazi Üniversitesi')]: 29,
+  },
   '859': {
     [normalizeText('SSK')]: 0,
     [normalizeText('Eczacılık')]: 1,
@@ -194,14 +320,14 @@ const MEASURED_ROUTE_STOP_OFFSETS: Record<string, Record<string, number>> = {
     [normalizeText('Alanönü')]: 20,
     [normalizeText('Gökmeydan')]: 22,
     [normalizeText('Odunpazarı Belediyesi')]: 24,
-    [normalizeText('Yenikent')]: 26,
-    [normalizeText('Baro')]: 28,
+    [normalizeText('Yunuskent')]: 26,
+    [normalizeText('Borsa')]: 28,
     [normalizeText('Otogar')]: 30,
   },
   '862': {
     [normalizeText('Otogar')]: 0,
-    [normalizeText('Baro')]: 1,
-    [normalizeText('Yenikent')]: 2,
+    [normalizeText('Borsa')]: 1,
+    [normalizeText('Yunuskent')]: 2,
     [normalizeText('Odunpazarı Belediyesi')]: 5,
     [normalizeText('Gökmeydan')]: 7,
     [normalizeText('Alanönü')]: 9,
@@ -225,7 +351,12 @@ function getMeasuredRouteOffset(routeId: string, stop: TramStop): MeasuredRouteO
     return { hasMeasuredRoute: false, offsetMinutes: null };
   }
 
-  const offsetMinutes = routeOffsets[normalizeText(stop.name)];
+  const normalizedStopName = normalizeText(stop.name);
+  const exactOffsetMinutes = routeOffsets[normalizedStopName];
+  const offsetMinutes = exactOffsetMinutes ?? Object.entries(routeOffsets).find(([stopName]) => (
+    normalizedStopName.includes(stopName) || stopName.includes(normalizedStopName)
+  ))?.[1];
+
   return {
     hasMeasuredRoute: true,
     offsetMinutes: offsetMinutes ?? null,
@@ -240,7 +371,9 @@ function stopMatchesTerminal(stop: TramStop, terminal: string): boolean {
   if (normalizedTerminal === 'ES-ES') return stopName.includes('ES-ES');
   if (normalizedTerminal === 'SEHIR HASTANESI') return stopName.includes('SEHIR HASTANESI');
   if (normalizedTerminal === '75.YIL') return stopName.includes('75.YIL');
-  if (normalizedTerminal === 'KUMLUBEL') return stopName.includes('KUMLUBEL');
+  if (normalizedTerminal === 'KUMLUBEL') {
+    return stopName.includes('KUMLUBEL') || stopName.includes('TRAMVAY DURAGI');
+  }
 
   return stopName.includes(normalizedTerminal);
 }
@@ -298,11 +431,11 @@ class TramService {
       const config = ROUTE_CONFIG[routeId];
       if (!config || !stop.lines.includes(config.lineRef)) continue;
 
-      const offsetMinutes = this.getOffsetMinutesToStop(routeId, config, stop);
-      if (offsetMinutes == null) continue;
+      const offset = this.getOffsetToStop(routeId, config, stop);
+      if (!offset) continue;
 
       for (const departureMinutes of this.getUpcomingDepartures(route, now)) {
-        const arrivalAbsoluteMinutes = departureMinutes + offsetMinutes;
+        const arrivalAbsoluteMinutes = departureMinutes + offset.minutes;
         const etaMinutes = Math.ceil(arrivalAbsoluteMinutes - dateToMinutes(now));
         if (etaMinutes < 0) continue;
 
@@ -312,7 +445,8 @@ class TramService {
           routeName: config.displayName,
           etaMinutes,
           arrivalTime: minutesToClock(arrivalAbsoluteMinutes),
-          offsetMinutes: Math.round(offsetMinutes),
+          offsetMinutes: Math.round(offset.minutes),
+          offsetSource: offset.source,
         });
       }
     }
@@ -347,12 +481,33 @@ class TramService {
       .sort((a, b) => a - b);
   }
 
-  private getOffsetMinutesToStop(routeId: string, config: TramRouteConfig, stop: TramStop): number | null {
+  private getOffsetToStop(routeId: string, config: TramRouteConfig, stop: TramStop): TramOffsetEstimate | null {
     const measuredOffset = getMeasuredRouteOffset(routeId, stop);
     if (measuredOffset.hasMeasuredRoute) {
-      return measuredOffset.offsetMinutes;
+      return measuredOffset.offsetMinutes == null
+        ? null
+        : { minutes: measuredOffset.offsetMinutes, source: 'measured' };
     }
 
+    const routeDistance = this.getRouteDistanceToStop(config, stop);
+    if (!routeDistance) return null;
+
+    const stopIndex = this.getStopIndexOnRoute(
+      routeDistance.graph,
+      routeDistance.startDistances,
+      routeDistance.endDistances,
+      routeDistance.effectiveRouteMeters,
+      stop
+    );
+    if (stopIndex == null) return null;
+
+    return {
+      minutes: stopIndex * FIXED_INTERVAL_MINUTES_PER_STOP,
+      source: 'fixed-interval',
+    };
+  }
+
+  private getRouteDistanceToStop(config: TramRouteConfig, stop: TramStop): RouteStopDistanceContext | null {
     const graph = this.getRailGraph(config.lineRef);
     if (!graph) return null;
 
@@ -378,10 +533,7 @@ class TramService {
     if (!isOnRoute) return null;
 
     const effectiveRouteMeters = Math.max(routeMeters, throughTargetMeters);
-    const travelMinutes = (distanceMeters / 1000 / AVERAGE_TRAM_SPEED_KMH) * 60;
-    const stopCount = this.countStopsBeforeTarget(graph, startDistances, endDistances, effectiveRouteMeters, distanceMeters);
-
-    return travelMinutes + stopCount * DWELL_MINUTES_PER_STOP;
+    return { graph, startDistances, endDistances, routeMeters, distanceMeters, effectiveRouteMeters };
   }
 
   private getRailGraph(lineRef: string): RailGraph | null {
@@ -514,29 +666,41 @@ class TramService {
     return distances;
   }
 
-  private countStopsBeforeTarget(
+  private getStopIndexOnRoute(
     graph: RailGraph,
     startDistances: number[],
     endDistances: number[],
     routeMeters: number,
-    targetMeters: number
-  ): number {
-    let count = 0;
+    targetStop: TramStop
+  ): number | null {
+    const orderedStops = graph.lineStops
+      .map((stop) => {
+        const node = graph.stopNodeById.get(stop.id);
+        if (node == null) return null;
 
-    for (const stop of graph.lineStops) {
-      const node = graph.stopNodeById.get(stop.id);
-      if (node == null) continue;
+        const fromStart = startDistances[node];
+        const toEnd = endDistances[node];
+        if (!Number.isFinite(fromStart) || !Number.isFinite(toEnd)) return null;
+        if (fromStart + toEnd > routeMeters + ROUTE_ON_PATH_TOLERANCE_METERS) return null;
 
-      const fromStart = startDistances[node];
-      const toEnd = endDistances[node];
-      if (!Number.isFinite(fromStart) || !Number.isFinite(toEnd)) continue;
-      if (fromStart <= 1 || fromStart > targetMeters + ROUTE_ON_PATH_TOLERANCE_METERS) continue;
-      if (fromStart + toEnd > routeMeters + ROUTE_ON_PATH_TOLERANCE_METERS) continue;
+        return { name: stop.name, normalizedName: normalizeText(stop.name), fromStart };
+      })
+      .filter((stop): stop is { name: string; normalizedName: string; fromStart: number } => stop != null)
+      .sort((a, b) => a.fromStart - b.fromStart);
 
-      count += 1;
+    const uniqueStopNames: string[] = [];
+    const seen = new Set<string>();
+
+    for (const stop of orderedStops) {
+      if (seen.has(stop.normalizedName)) continue;
+
+      seen.add(stop.normalizedName);
+      uniqueStopNames.push(stop.normalizedName);
     }
 
-    return count;
+    const targetName = normalizeText(targetStop.name);
+    const index = uniqueStopNames.indexOf(targetName);
+    return index >= 0 ? index : null;
   }
 }
 
