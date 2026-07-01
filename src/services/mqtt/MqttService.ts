@@ -31,6 +31,13 @@ const NIMBUS_LOCATOR_URL = `https://nimbus.wialon.com/locator/api/${LOCATOR_HASH
 /** MQTT payload boyut üst sınırı (DoS koruması) */
 const MAX_MQTT_MESSAGE_BYTES = 256 * 1024;
 
+/**
+ * Konum tazelik sınırı. Broker, abone olunca her cihazın SON (retained) mesajını
+ * gönderir; bunların çoğu aylar önceki "hayalet" konumlardır. Gerçek GPS zamanı
+ * bundan eskiyse aracı canlı kabul etmeyiz.
+ */
+const MAX_POSITION_AGE_MS = config.app.vehiclePositionTtlMs;
+
 // Route ID -> Line mapping (MQTT'deki r alanından hat bulmak için)
 interface RouteMapping {
   line: string;
@@ -535,6 +542,20 @@ class MqttService {
 
     if (!lat || !lon) return;
 
+    // Gerçek GPS konum zamanı (saniye -> ms). Retained "hayalet" mesajlar aylar
+    // önceki zamanı taşır; bunları canlı göstermemek için gerçek zamanı kullanırız.
+    const fixTimeSec =
+      typeof data.msg?.t === 'number' ? data.msg.t :
+      typeof data.t === 'number' ? data.t : null;
+    const fixTimeMs = fixTimeSec ? fixTimeSec * 1000 : Date.now();
+
+    // Çok eski konumları (hayalet araçlar) hiç ekleme. Negatif yaş (ileri saat
+    // kayması) taze sayılır.
+    const ageMs = Date.now() - fixTimeMs;
+    if (ageMs > MAX_POSITION_AGE_MS) {
+      return;
+    }
+
     // 1. Önce Route ID'den hat bulmayı dene (en güvenilir yöntem)
     // MQTT mesajında "r" alanı route ID'yi içerir (msg objesi içinde)
     let line: string | null = null;
@@ -599,7 +620,7 @@ class MqttService {
       speed: data.pos?.s || data.msg?.pos?.s || data.speed || 0,
       heading: data.pos?.c || data.msg?.pos?.c || data.course || data.heading || 0,
       routeId: routeId, // Yön belirlemek için route ID'yi sakla
-      timestamp: Date.now()
+      timestamp: fixTimeMs // Gerçek GPS zamanı; TTL temizliği buna göre çalışır
     };
 
     this.vehicleMap.set(idStr, position);
