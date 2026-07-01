@@ -12,6 +12,9 @@ const DEFAULT_BUS_SPEED_KMH = config.app.defaultBusSpeedKmh;
 const STOP_DELAY_SECONDS = 25; // Her durak için ortalama bekleme süresi (saniye)
 const ROAD_DISTANCE_FACTOR = 1.25; // Kuş uçuşu -> gerçek yol mesafe düzeltme faktörü
 const MAX_DISPLAY_ETA_MINUTES = 30;
+// Nimbus tarifeli varışlar otoriter kaynak; seyrek hatlarda 30 dk'lık sınır
+// gerçek varışları gizliyordu. Tarifeli veriye daha geniş bir pencere tanınır.
+const MAX_SCHEDULE_ETA_MINUTES = 90;
 const NEARBY_LINE_STOP_CANDIDATE_METERS = 250;
 
 /**
@@ -489,20 +492,45 @@ class ETAService {
     // Bizim rota-bazlı hesap: durak çözümü + Nimbus yoksa fallback olarak kullanılır
     const localResult = this.calculateETA(userLocation, line, vehicles, preferredDirectionFull);
 
-    // Durak çözülebildiyse Nimbus'un kendi ETA'sını BİRİNCİL kaynak olarak dene.
+    // Nimbus'un kendi ETA'sını BİRİNCİL kaynak olarak dene.
     // Nimbus, gerçek yol geometrisi + geçmiş hız profiliyle hesapladığı için
     // bizim hesaptan daha stabil ve doğru.
-    if (localResult.stopId) {
-      const stopWialonId = this.extractWialonId(localResult.stopId);
+    // ÖNEMLİ: Yakın durağın HER İKİ yön tarafını (örn. CAMİ-1 + CAMİ-2) sorgularız.
+    // Böylece bir yönün varışı diğer taraftaki durakta olsa bile kaçmaz; canlı araç
+    // bulunamasa dahi doğru durak tarafı otomatik yakalanır.
+    const nearestStopResult = stopService.findNearestStop(userLocation);
 
-      if (stopWialonId) {
-        devLog(`🔍 📅 Nimbus ETA (birincil) çekiliyor...`);
-        const directionLabel = preferredDirectionFull
-          ? routeService.formatDirection(preferredDirectionFull)
-          : null;
-        const scheduledArrivals = (await this.getScheduledArrivals(stopWialonId, line))
+    if (nearestStopResult.stop) {
+      const candidateStops = (nearestStopResult.allNearbyStops || [{ stop: nearestStopResult.stop, distance: nearestStopResult.distance }])
+        .filter(item => item.distance <= Math.max(NEARBY_LINE_STOP_CANDIDATE_METERS, nearestStopResult.distance + 75))
+        .filter(item => this.findMatchingLinesAtStop(line, item.stop.lines).length > 0);
+
+      const stopsToQuery = candidateStops.length > 0
+        ? candidateStops
+        : [{ stop: nearestStopResult.stop, distance: nearestStopResult.distance }];
+
+      const wialonIds = [...new Set(
+        stopsToQuery
+          .map(item => this.extractWialonId(item.stop.id))
+          .filter((id): id is number => id !== null)
+      )];
+
+      const directionLabel = preferredDirectionFull
+        ? routeService.formatDirection(preferredDirectionFull)
+        : null;
+
+      if (wialonIds.length > 0) {
+        devLog(`🔍 📅 Nimbus ETA (birincil) çekiliyor... (${wialonIds.length} durak tarafı)`);
+
+        const arrivalGroups = await Promise.all(
+          wialonIds.map(id => this.getScheduledArrivals(id, line))
+        );
+
+        const scheduledArrivals = arrivalGroups
+          .flat()
           .filter(arrival => !directionLabel || arrival.direction === directionLabel)
-          .filter(arrival => arrival.etaMinutes <= MAX_DISPLAY_ETA_MINUTES);
+          .filter(arrival => arrival.etaMinutes <= MAX_SCHEDULE_ETA_MINUTES)
+          .sort((a, b) => a.etaMinutes - b.etaMinutes);
 
         if (scheduledArrivals.length > 0) {
           const primary = scheduledArrivals[0]; // en yakın varış
@@ -514,6 +542,8 @@ class ETAService {
             ...localResult,
             status: 'ok',
             etaMinutes: primary.etaMinutes,
+            stopName: localResult.stopName || nearestStopResult.stop.name,
+            stopId: localResult.stopId || nearestStopResult.stop.id,
             line: localResult.line || primary.line,
             direction: primary.direction || localResult.direction,
             errorMessage: undefined, // eski local hata mesajını taşıma

@@ -308,27 +308,6 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
 
           {selectedLine && directionOptions.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.directionRow}>
-              <TouchableOpacity
-                style={[
-                  styles.directionChip,
-                  {
-                    backgroundColor: selectedDirectionFull === null ? theme.colors.primary : theme.colors.surface,
-                    borderColor: selectedDirectionFull === null ? theme.colors.primary : theme.colors.border,
-                  },
-                ]}
-                onPress={() => handleDirectionPress(null)}
-                disabled={loading}
-              >
-                <Text
-                  style={[
-                    styles.directionChipText,
-                    { color: selectedDirectionFull === null ? '#fff' : theme.colors.textSecondary },
-                  ]}
-                >
-                  Tüm yönler
-                </Text>
-              </TouchableOpacity>
-
               {directionOptions.map(option => {
                 const active = selectedDirectionFull === option.direction;
 
