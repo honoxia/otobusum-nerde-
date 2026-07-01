@@ -1,85 +1,87 @@
-// Light/Dark renk paletleri
+// Light/Dark renk paletleri — "Eskişehir Ulaşım" tasarım sistemine göre
+// (mor vurgu #8A73FF, koyu mavi-siyah zeminler, yeşil/turuncu/kırmızı durum renkleri)
+
 export const lightColors = {
-  // Primary
-  primary: '#007AFF',
-  primaryLight: '#4DA2FF',
-  primaryDark: '#0055B3',
+  // Primary (mor vurgu — açık zeminde biraz daha koyu ton)
+  primary: '#7458F5',
+  primaryLight: '#8A73FF',
+  primaryDark: '#5B3DF0',
 
   // Semantic
-  success: '#34C759',
-  warning: '#FF9500',
-  error: '#FF3B30',
-  info: '#5856D6',
+  success: '#20B877',
+  warning: '#E8871E',
+  error: '#F0325A',
+  info: '#2E97F0',
 
   // Background
-  background: '#FFFFFF',
-  surface: '#F5F5F7',
-  surfaceSecondary: '#E5E5EA',
+  background: '#F4F6FA',
+  surface: '#FFFFFF',
+  surfaceSecondary: '#E6E8EC',
 
   // Text
-  textPrimary: '#1C1C1E',
-  textSecondary: '#8E8E93',
-  textTertiary: '#AEAEB2',
+  textPrimary: '#0B0D12',
+  textSecondary: '#656C7A',
+  textTertiary: '#9AA1B0',
   textInverse: '#FFFFFF',
 
   // Border
-  border: '#C6C6C8',
-  borderLight: '#E5E5EA',
-  divider: '#D1D1D6',
+  border: '#E6E8EC',
+  borderLight: '#EEF0F4',
+  divider: '#E6E8EC',
 
   // Misc
-  shadow: 'rgba(0, 0, 0, 0.1)',
-  overlay: 'rgba(0, 0, 0, 0.4)',
+  shadow: 'rgba(11, 13, 18, 0.08)',
+  overlay: 'rgba(8, 9, 12, 0.35)',
   transparent: 'transparent',
 
   // Map specific
   map: {
-    user: '#007AFF',
-    bus: '#34C759',
-    stop: '#FF9500',
-    nearestStop: '#FF3B30',
+    user: '#3BA9FF',
+    bus: '#7458F5',
+    stop: '#E8871E',
+    nearestStop: '#F0325A',
   },
 };
 
 export const darkColors = {
-  // Primary (OLED-optimized)
-  primary: '#0A84FF',
-  primaryLight: '#4DA2FF',
-  primaryDark: '#0055B3',
+  // Primary (mor vurgu)
+  primary: '#8A73FF',
+  primaryLight: '#A594FF',
+  primaryDark: '#5B3DF0',
 
   // Semantic
-  success: '#30D158',
-  warning: '#FF9F0A',
-  error: '#FF453A',
-  info: '#5E5CE6',
+  success: '#2FD08A',
+  warning: '#FFA23C',
+  error: '#FF5470',
+  info: '#3BA9FF',
 
-  // Background (OLED black)
-  background: '#000000',
-  surface: '#1C1C1E',
-  surfaceSecondary: '#2C2C2E',
+  // Background (koyu mavi-siyah)
+  background: '#08090C',
+  surface: '#161922',
+  surfaceSecondary: '#1F2430',
 
   // Text
-  textPrimary: '#FFFFFF',
-  textSecondary: '#8E8E93',
-  textTertiary: '#636366',
-  textInverse: '#1C1C1E',
+  textPrimary: '#F4F6FA',
+  textSecondary: '#9AA1B0',
+  textTertiary: '#656C7A',
+  textInverse: '#08090C',
 
   // Border
-  border: '#38383A',
-  borderLight: '#48484A',
-  divider: '#38383A',
+  border: '#1F2430',
+  borderLight: '#2A3040',
+  divider: '#1F2430',
 
   // Misc
-  shadow: 'rgba(0, 0, 0, 0.3)',
+  shadow: 'rgba(0, 0, 0, 0.5)',
   overlay: 'rgba(0, 0, 0, 0.6)',
   transparent: 'transparent',
 
   // Map specific
   map: {
-    user: '#0A84FF',
-    bus: '#30D158',
-    stop: '#FF9F0A',
-    nearestStop: '#FF453A',
+    user: '#3BA9FF',
+    bus: '#8A73FF',
+    stop: '#FFA23C',
+    nearestStop: '#FF5470',
   },
 };
 
