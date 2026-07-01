@@ -1,4 +1,4 @@
-import { Coordinates, BusPosition, ETAResult, ScheduledArrival } from '../types/shared-types';
+import { Coordinates, BusPosition, ETAResult, ScheduledArrival, BusStop } from '../types/shared-types';
 import { calculateHaversineDistance } from '../utils/geo.utils';
 import stopService from './stops/StopService';
 import routeService from './routes/RouteService';
@@ -527,47 +527,55 @@ class ETAService {
         ? candidateStops
         : [{ stop: nearestStopResult.stop, distance: nearestStopResult.distance }];
 
-      const wialonIds = [...new Set(
-        stopsToQuery
-          .map(item => this.extractWialonId(item.stop.id))
-          .filter((id): id is number => id !== null)
-      )];
+      // Aynı wialonId'yi iki kez sorgulamamak için tarafları tekilleştir (id -> durak)
+      const uniqueStops = new Map<number, BusStop>();
+      for (const item of stopsToQuery) {
+        const wid = this.extractWialonId(item.stop.id);
+        if (wid !== null && !uniqueStops.has(wid)) {
+          uniqueStops.set(wid, item.stop);
+        }
+      }
 
       const directionLabel = preferredDirectionFull
         ? routeService.formatDirection(preferredDirectionFull)
         : null;
 
-      if (wialonIds.length > 0) {
-        devLog(`🔍 📅 Nimbus ETA (birincil) çekiliyor... (${wialonIds.length} durak tarafı)`);
+      if (uniqueStops.size > 0) {
+        devLog(`🔍 📅 Nimbus ETA (birincil) çekiliyor... (${uniqueStops.size} durak tarafı)`);
 
+        const stopEntries = [...uniqueStops.entries()];
         const arrivalGroups = await Promise.all(
-          wialonIds.map(id => this.getScheduledArrivals(id, line))
+          stopEntries.map(([wid]) => this.getScheduledArrivals(wid, line))
         );
 
-        const scheduledArrivals = arrivalGroups
-          .flat()
-          .filter(arrival => !directionLabel || arrival.direction === directionLabel)
-          .filter(arrival => arrival.etaMinutes <= MAX_SCHEDULE_ETA_MINUTES)
-          .sort((a, b) => a.etaMinutes - b.etaMinutes);
+        // Her varışı geldiği durakla eşle; böylece yöne göre doğru tarafın
+        // (CAMİ-1 / CAMİ-2) gerçek adını gösterebiliriz.
+        const withStop = arrivalGroups.flatMap((arrivals, idx) =>
+          arrivals.map(arrival => ({ arrival, stop: stopEntries[idx][1] }))
+        );
+
+        const scheduledArrivals = withStop
+          .filter(({ arrival }) => !directionLabel || arrival.direction === directionLabel)
+          .filter(({ arrival }) => arrival.etaMinutes <= MAX_SCHEDULE_ETA_MINUTES)
+          .sort((a, b) => a.arrival.etaMinutes - b.arrival.etaMinutes);
 
         if (scheduledArrivals.length > 0) {
           const primary = scheduledArrivals[0]; // en yakın varış
           devLog(
-            `🔍 ✅ Nimbus birincil ETA: ${primary.line} ${primary.direction} → ${primary.etaMinutes} dk`
+            `🔍 ✅ Nimbus birincil ETA: ${primary.arrival.line} ${primary.arrival.direction} → ${primary.arrival.etaMinutes} dk @ ${primary.stop.name}`
           );
 
           return {
             ...localResult,
             status: 'ok',
-            etaMinutes: primary.etaMinutes,
-            // Kart, üstteki StopCard ile tutarlı olsun diye hep en yakın durağı gösterir
-            // (aksi halde bir tarafta CAMİ-1, diğerinde CAMİ-2 yazıp kafa karıştırıyordu)
-            stopName: nearestStopResult.stop.name,
-            stopId: nearestStopResult.stop.id,
-            line: localResult.line || primary.line,
-            direction: primary.direction || localResult.direction,
+            etaMinutes: primary.arrival.etaMinutes,
+            // Varışın gerçekleştiği durağı göster (yöne göre doğru taraf)
+            stopName: primary.stop.name,
+            stopId: primary.stop.id,
+            line: localResult.line || primary.arrival.line,
+            direction: primary.arrival.direction || localResult.direction,
             errorMessage: undefined, // eski local hata mesajını taşıma
-            scheduledArrivals,
+            scheduledArrivals: scheduledArrivals.map(item => item.arrival),
           };
         }
 
