@@ -8,6 +8,7 @@ import { HomeScreen, AppScreen } from './src/screens/HomeScreen';
 import { BusScreen } from './src/screens/BusScreen';
 import { TramScreen } from './src/screens/TramScreen';
 import { RoutePlannerScreen } from './src/screens/RoutePlannerScreen';
+import { DolmusLinesScreen } from './src/components/Dolmus/DolmusLinesScreen';
 import { DolmusMapScreen } from './src/components/Dolmus/DolmusMapScreen';
 import dolmusData from './src/data/dolmus-data.json';
 import { DolmusLine } from './src/types/shared-types';
@@ -16,17 +17,24 @@ global.Buffer = Buffer;
 
 function AppContent() {
   const [screen, setScreen] = useState<AppScreen>('home');
+  const [selectedDolmusLine, setSelectedDolmusLine] = useState<DolmusLine | null>(null);
   const dolmusLines = useMemo(() => dolmusData as unknown as DolmusLine[], []);
-  const dolmusLine = dolmusLines[0] ?? null;
 
-  const goHome = () => setScreen('home');
+  const goHome = () => {
+    setSelectedDolmusLine(null);
+    setScreen('home');
+  };
 
   if (screen === 'bus') {
     return <BusScreen onBack={goHome} />;
   }
 
   if (screen === 'dolmus') {
-    return <DolmusMapScreen line={dolmusLine} onBack={goHome} />;
+    if (selectedDolmusLine) {
+      return <DolmusMapScreen line={selectedDolmusLine} onBack={() => setSelectedDolmusLine(null)} />;
+    }
+
+    return <DolmusLinesScreen lines={dolmusLines} onSelect={setSelectedDolmusLine} onBack={goHome} />;
   }
 
   if (screen === 'tram') {
