@@ -25,7 +25,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop, distance, onLinePress,
           <MaterialIcons name="place" size={22} color={colors.primaryLight} />
         </View>
         <View style={styles.textCol}>
-          <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>{stop.name}</Text>
+          <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={2}>{stop.name}</Text>
           <Text style={[styles.distance, { color: colors.textSecondary }]}>{formatDistance(distance)}</Text>
         </View>
       </View>
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    flexShrink: 1,
+    flex: 1,
   },
   iconCircle: {
     width: 40,
@@ -94,7 +94,8 @@ const styles = StyleSheet.create({
   },
   chipScroll: {
     flexGrow: 0,
-    maxWidth: '45%',
+    flexShrink: 0,
+    maxWidth: '38%',
   },
   chips: {
     gap: 4,
