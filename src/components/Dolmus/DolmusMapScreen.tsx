@@ -41,7 +41,7 @@ function scheduleRows(day: DolmusDaySchedule | undefined): [string, number[]][] 
 function directionLabel(line: DolmusLine): string {
   const [, to] = line.line.split(' - ');
   if (to) return `${to.trim()} yönü`;
-  return line.loop ? `${line.firstStop} · halka` : line.firstStop;
+  return line.firstStop;
 }
 
 function lineGroupName(line: DolmusLine): string {
@@ -60,20 +60,31 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
   const line = lines?.[selectedLineIndex] ?? lines?.[0] ?? null;
   const title = line ? lineGroupName(line) : 'Dolmuş';
   const html = useMemo(() => buildOsmHtml({ tileUrl: config.map.tileUrl }), []);
-  const nearestInfo = useMemo(() => {
-    if (!line || !location) return null;
-    return dolmusService.getNearestInfo(location, line);
+  const [selectedLegIndex, setSelectedLegIndex] = useState<number | null>(null);
+  const legInfos = useMemo(() => {
+    if (!line || !location) return [];
+    return dolmusService.getLegInfos(location, line);
   }, [line, location]);
+  // Default to the leg whose road is physically closest to the user
+  const autoLegIndex = useMemo(() => {
+    let best = 0;
+    legInfos.forEach((leg, index) => {
+      if (leg.nearest.distanceMeters < legInfos[best].nearest.distanceMeters) best = index;
+    });
+    return best;
+  }, [legInfos]);
+  const activeLegIndex = selectedLegIndex ?? autoLegIndex;
+  const activeLeg = legInfos[activeLegIndex] ?? legInfos[0] ?? null;
   const nextPassings = useMemo(() => {
-    if (!line || !nearestInfo) return [];
-    return dolmusService.getNextPassings(line, nearestInfo.minutesAtPoint, new Date(), 3);
-  }, [line, nearestInfo]);
+    if (!line || !activeLeg) return [];
+    return dolmusService.getNextPassings(line, activeLeg.minutesList, new Date(), 3);
+  }, [line, activeLeg]);
 
   const pushDolmus = useCallback(() => {
     if (!line) return;
-    const payload = JSON.stringify({ ...line, nearestPoint: nearestInfo?.nearest.point ?? null });
+    const payload = JSON.stringify({ ...line, nearestPoint: activeLeg?.nearest.point ?? null });
     webViewRef.current?.injectJavaScript(`window.updateDolmusData(${JSON.stringify(payload)}); true;`);
-  }, [line, nearestInfo]);
+  }, [line, activeLeg]);
 
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     try {
@@ -88,6 +99,11 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
     setSelectedLineIndex(0);
     setScheduleOpen(false);
   }, [lines]);
+
+  // Hat değişince yön seçimini otomatiğe (en yakın bacak) döndür
+  useEffect(() => {
+    setSelectedLegIndex(null);
+  }, [selectedLineIndex, lines]);
 
   useEffect(() => { pushDolmus(); }, [pushDolmus]);
 
@@ -161,6 +177,33 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
             </ScrollView>
           )}
 
+          {legInfos.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.directionRow}>
+              {legInfos.map((leg, index) => {
+                const active = index === activeLegIndex;
+
+                return (
+                  <TouchableOpacity
+                    key={leg.label ?? String(index)}
+                    style={[
+                      styles.directionChip,
+                      {
+                        backgroundColor: active ? colors.primary : 'transparent',
+                        borderColor: active ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedLegIndex(index)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.directionChipText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>
+                      {leg.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
           <View style={[styles.routeCard, { backgroundColor: colors.surfaceSecondary }]}>
             <View style={[styles.pinWrap, { backgroundColor: 'rgba(79, 70, 229, 0.16)' }]}>
               <MaterialIcons name="place" size={24} color={colors.primaryLight} />
@@ -170,7 +213,7 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
                 {title}
               </Text>
               <Text style={[styles.routeMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                {directionLabel(line)}
+                {activeLeg?.label ?? directionLabel(line)}
               </Text>
             </View>
           </View>
@@ -194,7 +237,7 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
                   <Text style={[styles.bigEtaUnit, { color: colors.textPrimary }]}>dakika</Text>
                 </View>
                 <Text style={[styles.etaHelp, { color: colors.textSecondary }]}>
-                  Rotaya {nearestInfo ? formatDistance(nearestInfo.nearest.distanceMeters) : '-'} uzaktasın
+                  Rotaya {activeLeg ? formatDistance(activeLeg.nearest.distanceMeters) : '-'} uzaktasın
                 </Text>
               </>
             ) : (

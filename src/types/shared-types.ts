@@ -116,6 +116,7 @@ export interface DolmusLine {
   color: string; // Hat rengi (hex)
   firstStop: string; // Kalkış durağı adı
   loop: boolean; // Tek tur halka güzergah mı
+  directionLabels?: { outbound: string; return: string }; // Halka hatta gidiş/dönüş bacağı etiketleri
   waypoints: DolmusWaypoint[]; // Sıralı güzergah noktaları (duraklar + saat referansı)
   path: Coordinates[]; // Haritaya çizilen yol geometrisi (yola oturmuş rota çizgisi)
   schedule: DolmusSchedule; // İlk duraktan hareket saatleri

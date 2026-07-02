@@ -5,6 +5,10 @@
     "color": "#E11D2A",
     "firstStop": "İlk Durak",
     "loop": true,
+    "directionLabels": {
+      "outbound": "Espark yönü",
+      "return": "Batıkent yönü"
+    },
     "waypoints": [
       {
         "name": "İlk Durak",
@@ -8481,6 +8485,10 @@
     "color": "#16A34A",
     "firstStop": "Batıkent",
     "loop": true,
+    "directionLabels": {
+      "outbound": "Vişnelik yönü",
+      "return": "Batıkent yönü"
+    },
     "waypoints": [
       {
         "name": "Batıkent",

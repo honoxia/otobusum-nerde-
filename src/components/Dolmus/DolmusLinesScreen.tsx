@@ -28,7 +28,7 @@ function lineGroupName(line: DolmusLine): string {
 function directionLabel(line: DolmusLine): string {
   const [, to] = line.line.split(' - ');
   if (to) return `${to.trim()} yönü`;
-  return line.loop ? `${line.firstStop} · halka` : line.firstStop;
+  return line.firstStop;
 }
 
 function groupDolmusLines(lines: DolmusLine[]): DolmusLineGroup[] {

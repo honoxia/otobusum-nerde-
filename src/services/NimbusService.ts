@@ -152,15 +152,20 @@ class NimbusService {
     const normalizedLine = line.toUpperCase().trim();
 
     return allArrivals.filter(arrival => {
-      const arrivalLine = arrival.line.toUpperCase();
+      const arrivalLine = arrival.line.toUpperCase().trim();
 
-      // Tam eşleşme
+      // Exact match
       if (arrivalLine === normalizedLine) return true;
 
-      // Base hat sorgusu (16 -> 16M, 16S)
+      // Base line query: digits must be followed by a letter
+      // "16" -> 16M, 16S (but NOT 160, 161)
       if (/^\d+$/.test(normalizedLine)) {
-        return arrivalLine.startsWith(normalizedLine) &&
-               arrivalLine.length > normalizedLine.length;
+        return new RegExp(`^${normalizedLine}[A-Z]`).test(arrivalLine);
+      }
+
+      // Variant query: "16M" -> 16M-NÖBET (exact match handled above)
+      if (/^\d+[A-Z]$/.test(normalizedLine)) {
+        return arrivalLine.startsWith(normalizedLine + '-');
       }
 
       return false;

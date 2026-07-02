@@ -167,6 +167,38 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
     [location, buses, selectedDirectionFull]
   );
 
+  // Keep latest values in a ref so the refresh interval never uses stale data
+  // and does not reset every time MQTT pushes new vehicle positions.
+  const refreshDataRef = useRef({ location, buses, selectedLine, selectedDirectionFull });
+  useEffect(() => {
+    refreshDataRef.current = { location, buses, selectedLine, selectedDirectionFull };
+  }, [location, buses, selectedLine, selectedDirectionFull]);
+
+  // Silently refresh the displayed ETA every 30s (no spinner/toast/speech)
+  useEffect(() => {
+    if (!selectedLine) return;
+
+    const intervalId = setInterval(async () => {
+      const current = refreshDataRef.current;
+      if (!current.location || !current.selectedLine) return;
+
+      try {
+        const result = await etaService.calculateETAWithSchedule(
+          current.location,
+          current.selectedLine,
+          current.buses,
+          current.selectedDirectionFull
+        );
+        setEtaResult(result);
+        devLog(`[APP] ETA otomatik yenilendi: ${current.selectedLine}`);
+      } catch {
+        // Keep showing the last known result on refresh failure
+      }
+    }, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [selectedLine]);
+
   useEffect(() => {
     if (!sttAvailable || !Voice) return;
 
