@@ -112,7 +112,7 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ line, onBack }
               MİNİBÜS · {line.line}
             </Text>
             <Text style={[styles.liveRoute, { color: colors.textPrimary }]} numberOfLines={1}>
-              {line.firstStop} - {line.lastStop}
+              {line.loop ? `${line.firstStop} · halka` : line.firstStop}
             </Text>
             <Text style={[styles.liveStatus, { color: colors.textSecondary }]}>
               {locationLoading
