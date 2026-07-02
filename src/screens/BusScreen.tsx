@@ -18,9 +18,10 @@ import { MapContainer } from '../components/Map/MapContainer';
 import { StopCard } from '../components/StopCard/StopCard';
 import { ETACard } from '../components/ETACard/ETACard';
 import { StopDetailSheet, StopDetailSheetRef } from '../components/BottomSheet/StopDetailSheet';
-import { Button } from '../components/common';
 import { SkeletonCard } from '../components/common/Skeleton';
-import { ScreenHeader } from '../components/common/ScreenHeader';
+import { AppTopBar } from '../components/common/AppTopBar';
+import { AppBottomNav } from '../components/common/AppBottomNav';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useLocation } from '../hooks/useLocation';
 import { useStops } from '../hooks/useStops';
 import { useNearestStop } from '../hooks/useNearestStop';
@@ -245,8 +246,8 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-      <ScreenHeader title="Otobüs" subtitle="Canlı araçlar ve yaklaşan otobüs bilgisi" onBack={onBack} />
+      <StatusBar style="light" />
+      <AppTopBar onBack={onBack} />
 
       <View style={mapExpanded ? styles.mapExpanded : styles.mapCollapsed}>
         {isLoading ? (
@@ -317,7 +318,7 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
                     style={[
                       styles.directionChip,
                       {
-                        backgroundColor: active ? theme.colors.primary : theme.colors.surface,
+                        backgroundColor: active ? theme.colors.primary : 'transparent',
                         borderColor: active ? theme.colors.primary : theme.colors.border,
                       },
                     ]}
@@ -358,41 +359,41 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
           )}
         </ScrollView>
 
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-                color: theme.colors.textPrimary,
-              },
-            ]}
-            placeholder="Örn: 54 ne zaman gelecek?"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={query}
-            onChangeText={setQuery}
-            onSubmitEditing={handleSubmit}
-            returnKeyType="search"
-            editable={!loading}
-          />
-
-          {sttEnabled && (
-            <TouchableOpacity
-              style={[styles.micButton, { backgroundColor: isListening ? theme.colors.error : theme.colors.primary }]}
-              onPressIn={startListening}
-              onPressOut={stopListening}
-              disabled={loading}
-            >
-              <Text style={styles.micButtonText}>{isListening ? '...' : '🎤'}</Text>
-            </TouchableOpacity>
-          )}
+        <View style={styles.searchRow}>
+          <View style={[styles.searchInputWrap, { backgroundColor: theme.colors.surfaceSecondary }]}>
+            <TextInput
+              style={[styles.searchInput, { color: theme.colors.textPrimary }]}
+              placeholder="Örn: 54 ne zaman gelecek?"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={handleSubmit}
+              returnKeyType="search"
+              editable={!loading}
+            />
+            {sttEnabled && (
+              <TouchableOpacity
+                style={styles.micBtn}
+                onPressIn={startListening}
+                onPressOut={stopListening}
+                disabled={loading}
+              >
+                <MaterialIcons name="mic" size={22} color={isListening ? theme.colors.error : theme.colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity
+            style={[styles.askBtn, { backgroundColor: theme.colors.primary, opacity: !query.trim() || loading ? 0.5 : 1 }]}
+            onPress={handleSubmit}
+            disabled={!query.trim() || loading}
+            activeOpacity={0.85}
+          >
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.askBtnText}>Sor</Text>}
+          </TouchableOpacity>
         </View>
-
-        <Button onPress={handleSubmit} loading={loading} disabled={!query.trim()} fullWidth>
-          Sor
-        </Button>
       </View>
+
+      <AppBottomNav active="home" onHome={onBack} />
 
       <StopDetailSheet
         ref={bottomSheetRef}
@@ -494,40 +495,53 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   directionChip: {
-    minHeight: 34,
-    paddingHorizontal: 12,
-    borderRadius: 17,
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 999,
     borderWidth: 1,
     justifyContent: 'center',
   },
   directionChipText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
   },
   etaContainer: {
     marginVertical: 4,
   },
-  inputRow: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  input: {
+  searchInputWrap: {
     flex: 1,
-    height: 48,
-    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
     borderRadius: 12,
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+    paddingRight: 4,
+  },
+  searchInput: {
+    flex: 1,
     fontSize: 16,
   },
-  micButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
+  micBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  micButtonText: {
-    fontSize: 20,
+  askBtn: {
+    height: 56,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  askBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

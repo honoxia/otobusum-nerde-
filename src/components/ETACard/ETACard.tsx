@@ -8,121 +8,81 @@ interface ETACardProps {
 }
 
 export const ETACard: React.FC<ETACardProps> = ({ result }) => {
-  const theme = useTheme();
+  const { colors } = useTheme();
 
-  const getStatusConfig = () => {
-    switch (result.status) {
-      case 'ok':
-        if (result.etaMinutes !== null && result.etaMinutes !== undefined) {
-          if (result.etaMinutes <= 2) {
-            return {
-              backgroundColor: theme.colors.error,
-              statusText: 'Geliyor!',
-              showMinutes: true,
-            };
-          }
-          if (result.etaMinutes <= 5) {
-            return {
-              backgroundColor: theme.colors.warning,
-              statusText: 'Yaklaşıyor',
-              showMinutes: true,
-            };
-          }
-          return {
-            backgroundColor: theme.colors.success,
-            statusText: 'Yolda',
-            showMinutes: true,
-          };
-        }
-        return {
-          backgroundColor: theme.colors.textSecondary,
-          statusText: 'Araç yok',
-          showMinutes: false,
-        };
-
-      case 'no_vehicle_approaching':
-        return {
-          backgroundColor: theme.colors.textSecondary,
-          statusText: 'Yaklaşan araç yok',
-          showMinutes: false,
-        };
-
-      case 'no_nearby_stop':
-        return {
-          backgroundColor: theme.colors.textTertiary,
-          statusText: 'Bu hat yakın duraklardan geçmiyor',
-          showMinutes: false,
-        };
-
-      case 'error':
-        return {
-          backgroundColor: theme.colors.error,
-          statusText: result.errorMessage || 'Hata oluştu',
-          showMinutes: false,
-        };
-
-      default:
-        return {
-          backgroundColor: theme.colors.textSecondary,
-          statusText: 'Bilinmiyor',
-          showMinutes: false,
-        };
+  // Duruma göre aksan rengi + kısa etiket
+  const getStatus = (): { color: string; label: string; showMinutes: boolean } => {
+    if (result.status === 'ok' && result.etaMinutes != null) {
+      if (result.etaMinutes <= 2) return { color: colors.error, label: 'Geliyor!', showMinutes: true };
+      if (result.etaMinutes <= 5) return { color: colors.warning, label: 'Yaklaşıyor', showMinutes: true };
+      return { color: colors.success, label: 'Yolda', showMinutes: true };
     }
+    if (result.status === 'no_vehicle_approaching') {
+      return { color: colors.textTertiary, label: 'Yaklaşan araç yok', showMinutes: false };
+    }
+    if (result.status === 'no_nearby_stop') {
+      return { color: colors.textTertiary, label: 'Bu hat yakın duraklardan geçmiyor', showMinutes: false };
+    }
+    return { color: colors.error, label: result.errorMessage || 'Hata oluştu', showMinutes: false };
   };
 
-  const config = getStatusConfig();
+  const s = getStatus();
 
   return (
-    <View style={[styles.container, { backgroundColor: config.backgroundColor }]}>
-      {result.line && (
-        <View style={styles.lineContainer}>
-          <Text style={[styles.lineLabel, { color: 'rgba(255,255,255,0.8)' }]}>
-            Hat
-          </Text>
-          <Text style={styles.lineNumber}>{result.line}</Text>
-          {result.direction && (
-            <Text style={styles.directionText}>{result.direction}</Text>
+    <View>
+      <View style={[styles.card, { backgroundColor: colors.surfaceSecondary, borderLeftColor: s.color }]}>
+        {/* Üst satır: hat rozeti + durum + durak */}
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
+            {result.line && (
+              <View style={[styles.lineBadge, { backgroundColor: s.color }]}>
+                <Text style={styles.lineBadgeText}>{result.line}</Text>
+              </View>
+            )}
+            <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
+          </View>
+          {result.stopName && (
+            <Text style={[styles.stopName, { color: colors.textSecondary }]} numberOfLines={1}>
+              {result.stopName}
+            </Text>
           )}
         </View>
-      )}
 
-      <View style={styles.etaContainer}>
-        {config.showMinutes && result.etaMinutes !== null && result.etaMinutes !== undefined ? (
+        {s.showMinutes && result.etaMinutes != null ? (
           <>
-            <Text style={styles.etaMinutes}>{result.etaMinutes}</Text>
-            <Text style={styles.etaLabel}>dakika</Text>
+            <View style={styles.etaRow}>
+              <Text style={[styles.etaBig, { color: colors.textPrimary }]}>{result.etaMinutes}</Text>
+              <Text style={[styles.etaUnit, { color: colors.textSecondary }]}>dakika</Text>
+            </View>
+            {result.distance != null && (
+              <Text style={[styles.distance, { color: colors.textSecondary }]}>
+                Otobüs {(result.distance / 1000).toFixed(1)} km uzakta
+              </Text>
+            )}
           </>
         ) : (
-          <Text style={styles.statusText}>{config.statusText}</Text>
+          !result.line && <Text style={[styles.bareStatus, { color: colors.textPrimary }]}>{s.label}</Text>
         )}
       </View>
 
-      {result.stopName && (
-        <View style={styles.stopContainer}>
-          <Text style={[styles.stopLabel, { color: 'rgba(255,255,255,0.8)' }]}>
-            Durak
-          </Text>
-          <Text style={styles.stopName} numberOfLines={1}>
-            {result.stopName}
-          </Text>
-        </View>
-      )}
-
-      {result.distance && (
-        <Text style={[styles.distanceText, { color: 'rgba(255,255,255,0.7)' }]}>
-          Otobüs {(result.distance / 1000).toFixed(1)} km uzakta
-        </Text>
-      )}
-
-      {/* Tarifeli varış zamanları (Nimbus) */}
+      {/* Sonraki seferler (Nimbus tarifeli) */}
       {result.scheduledArrivals && result.scheduledArrivals.length > 0 && (
-        <View style={styles.scheduledContainer}>
-          <Text style={styles.scheduledTitle}>Tarifeli Varış Zamanları</Text>
-          {result.scheduledArrivals.slice(0, 2).map((arrival, index) => (
-            <View key={index} style={styles.scheduledRow}>
-              <Text style={styles.scheduledLine}>{arrival.line}</Text>
-              <Text style={styles.scheduledDirection}>{arrival.direction}</Text>
-              <Text style={styles.scheduledTime}>{arrival.etaMinutes} dk</Text>
+        <View style={[styles.schedule, { backgroundColor: colors.surface }]}>
+          <View style={[styles.scheduleHeader, { borderBottomColor: colors.divider }]}>
+            <Text style={[styles.scheduleTitle, { color: colors.textPrimary }]}>Sonraki Seferler</Text>
+          </View>
+          {result.scheduledArrivals.slice(0, 3).map((a, i) => (
+            <View
+              key={i}
+              style={[styles.scheduleRow, i < Math.min(result.scheduledArrivals!.length, 3) - 1 && { borderBottomColor: colors.divider, borderBottomWidth: StyleSheet.hairlineWidth }]}
+            >
+              <View style={styles.scheduleLeft}>
+                <View style={[styles.schedBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                  <Text style={[styles.schedBadgeText, { color: colors.textPrimary }]}>{a.line}</Text>
+                </View>
+                <Text style={[styles.schedDir, { color: colors.textPrimary }]} numberOfLines={1}>{a.direction}</Text>
+              </View>
+              <Text style={[styles.schedEta, { color: i === 0 ? colors.primaryLight : colors.textSecondary }]}>{a.etaMinutes} dk</Text>
             </View>
           ))}
         </View>
@@ -132,114 +92,114 @@ export const ETACard: React.FC<ETACardProps> = ({ result }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    borderRadius: 16,
-    padding: 12,
-    alignItems: 'center',
-  },
-  lineContainer: {
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  lineLabel: {
-    fontSize: 11,
-    marginBottom: 1,
-  },
-  lineNumber: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#fff',
-  },
-  directionText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+  card: {
     borderRadius: 12,
-    overflow: 'hidden',
+    borderLeftWidth: 4,
+    padding: 16,
   },
-  etaContainer: {
-    alignItems: 'center',
-    marginVertical: 2,
-  },
-  etaMinutes: {
-    fontSize: 44,
-    fontWeight: '800',
-    color: '#fff',
-    lineHeight: 48,
-  },
-  etaLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#fff',
-    marginTop: -2,
-  },
-  statusText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    textAlign: 'center',
-    paddingVertical: 10,
-  },
-  stopContainer: {
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  stopLabel: {
-    fontSize: 11,
-    marginBottom: 1,
-  },
-  stopName: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#fff',
-  },
-  distanceText: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  scheduledContainer: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.2)',
-    width: '100%',
-  },
-  scheduledTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  scheduledRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 8,
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  scheduledLine: {
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  lineBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  lineBadgeText: {
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
-    color: '#fff',
-    width: 45,
   },
-  scheduledDirection: {
+  statusText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
-    flex: 1,
-    marginLeft: 8,
-  },
-  scheduledTime: {
-    fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
-    marginLeft: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    flexShrink: 1,
+  },
+  stopName: {
+    fontSize: 12,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  etaRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginTop: 14,
+  },
+  etaBig: {
+    fontSize: 48,
+    lineHeight: 50,
+    fontWeight: '800',
+    letterSpacing: -1,
+  },
+  etaUnit: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  distance: {
+    fontSize: 16,
+    marginTop: 4,
+  },
+  bareStatus: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  schedule: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  scheduleHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  scheduleTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  scheduleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexShrink: 1,
+  },
+  schedBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  schedBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  schedDir: {
+    fontSize: 16,
+    flexShrink: 1,
+  },
+  schedEta: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
