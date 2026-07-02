@@ -17,11 +17,11 @@ global.Buffer = Buffer;
 
 function AppContent() {
   const [screen, setScreen] = useState<AppScreen>('home');
-  const [selectedDolmusLine, setSelectedDolmusLine] = useState<DolmusLine | null>(null);
+  const [selectedDolmusLines, setSelectedDolmusLines] = useState<DolmusLine[] | null>(null);
   const dolmusLines = useMemo(() => dolmusData as unknown as DolmusLine[], []);
 
   const goHome = () => {
-    setSelectedDolmusLine(null);
+    setSelectedDolmusLines(null);
     setScreen('home');
   };
 
@@ -30,11 +30,11 @@ function AppContent() {
   }
 
   if (screen === 'dolmus') {
-    if (selectedDolmusLine) {
-      return <DolmusMapScreen line={selectedDolmusLine} onBack={() => setSelectedDolmusLine(null)} />;
+    if (selectedDolmusLines) {
+      return <DolmusMapScreen lines={selectedDolmusLines} onBack={() => setSelectedDolmusLines(null)} />;
     }
 
-    return <DolmusLinesScreen lines={dolmusLines} onSelect={setSelectedDolmusLine} onBack={goHome} />;
+    return <DolmusLinesScreen lines={dolmusLines} onSelect={setSelectedDolmusLines} onBack={goHome} />;
   }
 
   if (screen === 'tram') {

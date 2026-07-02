@@ -9,12 +9,54 @@ import { DolmusLine } from '../../types/shared-types';
 
 interface DolmusLinesScreenProps {
   lines: DolmusLine[];
-  onSelect: (line: DolmusLine) => void;
+  onSelect: (lines: DolmusLine[]) => void;
   onBack: () => void;
+}
+
+interface DolmusLineGroup {
+  key: string;
+  title: string;
+  color: string;
+  lines: DolmusLine[];
+}
+
+function lineGroupName(line: DolmusLine): string {
+  const match = line.line.match(/^(\S+\s+\d+)/);
+  return match?.[1] ?? line.line;
+}
+
+function directionLabel(line: DolmusLine): string {
+  const [, to] = line.line.split(' - ');
+  if (to) return `${to.trim()} yönü`;
+  return line.loop ? `${line.firstStop} · halka` : line.firstStop;
+}
+
+function groupDolmusLines(lines: DolmusLine[]): DolmusLineGroup[] {
+  const groups = new Map<string, DolmusLineGroup>();
+
+  lines.forEach((line) => {
+    const title = lineGroupName(line);
+    const current = groups.get(title);
+
+    if (current) {
+      current.lines.push(line);
+      return;
+    }
+
+    groups.set(title, {
+      key: title,
+      title,
+      color: line.color || '#4F46E5',
+      lines: [line],
+    });
+  });
+
+  return Array.from(groups.values());
 }
 
 export const DolmusLinesScreen: React.FC<DolmusLinesScreenProps> = ({ lines, onSelect, onBack }) => {
   const { colors } = useTheme();
+  const groups = groupDolmusLines(lines);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -28,20 +70,22 @@ export const DolmusLinesScreen: React.FC<DolmusLinesScreenProps> = ({ lines, onS
         </View>
 
         <View style={styles.list}>
-          {lines.map((line) => (
+          {groups.map((group) => (
             <TouchableOpacity
-              key={line.line}
+              key={group.key}
               style={[styles.row, { backgroundColor: colors.surfaceSecondary }]}
-              onPress={() => onSelect(line)}
+              onPress={() => onSelect(group.lines)}
               activeOpacity={0.85}
             >
-              <View style={[styles.iconWrap, { backgroundColor: line.color || colors.primary }]}>
+              <View style={[styles.iconWrap, { backgroundColor: group.color || colors.primary }]}>
                 <MaterialIcons name="airport-shuttle" size={24} color="#FFFFFF" />
               </View>
               <View style={styles.textWrap}>
-                <Text style={[styles.lineName, { color: colors.textPrimary }]}>{line.line}</Text>
+                <Text style={[styles.lineName, { color: colors.textPrimary }]}>{group.title}</Text>
                 <Text style={[styles.lineMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {line.firstStop}{line.loop ? ' · halka' : ''}
+                  {group.lines.length > 1
+                    ? group.lines.map(directionLabel).join(' · ')
+                    : directionLabel(group.lines[0])}
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={26} color={colors.textTertiary} />

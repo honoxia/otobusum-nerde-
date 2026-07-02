@@ -14,7 +14,7 @@ import dolmusService from '../../services/dolmus/DolmusService';
 import { formatDistance } from '../../utils/geo.utils';
 
 interface DolmusMapScreenProps {
-  line: DolmusLine | null;
+  lines: DolmusLine[] | null;
   onBack: () => void;
 }
 
@@ -38,12 +38,27 @@ function scheduleRows(day: DolmusDaySchedule | undefined): [string, number[]][] 
   return Object.entries(day).sort(([a], [b]) => Number(a) - Number(b));
 }
 
-export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ line, onBack }) => {
+function directionLabel(line: DolmusLine): string {
+  const [, to] = line.line.split(' - ');
+  if (to) return `${to.trim()} yönü`;
+  return line.loop ? `${line.firstStop} · halka` : line.firstStop;
+}
+
+function lineGroupName(line: DolmusLine): string {
+  const match = line.line.match(/^(\S+\s+\d+)/);
+  return match?.[1] ?? line.line;
+}
+
+export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack }) => {
   const { colors } = useTheme();
   const webViewRef = useRef<WebView>(null);
   const [day, setDay] = useState<DayKey>(todayKey());
-  const { location, error: locationError, isLoading: locationLoading } = useLocation();
+  const [selectedLineIndex, setSelectedLineIndex] = useState(0);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const { location, isLoading: locationLoading } = useLocation();
 
+  const line = lines?.[selectedLineIndex] ?? lines?.[0] ?? null;
+  const title = line ? lineGroupName(line) : 'Dolmuş';
   const html = useMemo(() => buildOsmHtml({ tileUrl: config.map.tileUrl }), []);
   const nearestInfo = useMemo(() => {
     if (!line || !location) return null;
@@ -69,6 +84,11 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ line, onBack }
 
   const rows = useMemo(() => scheduleRows(line?.schedule?.[day]), [line, day]);
 
+  useEffect(() => {
+    setSelectedLineIndex(0);
+    setScheduleOpen(false);
+  }, [lines]);
+
   useEffect(() => { pushDolmus(); }, [pushDolmus]);
 
   if (!line) {
@@ -84,14 +104,14 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ line, onBack }
     );
   }
 
-  const nextTime = nextPassings[0]?.time ?? null;
+  const nextPassing = nextPassings[0] ?? null;
+  const lineColor = line.color || colors.primary;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style="light" />
       <AppTopBar onBack={onBack} />
 
-      {/* Harita + üstünde canlı geçiş kartı */}
       <View style={styles.mapWrap}>
         <WebView
           ref={webViewRef}
@@ -105,75 +125,144 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ line, onBack }
           onMessage={handleMessage}
           androidLayerType="hardware"
         />
-
-        <View style={[styles.liveCard, { backgroundColor: colors.surface }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.liveKicker, { color: colors.primaryLight }]}>
-              MİNİBÜS · {line.line}
-            </Text>
-            <Text style={[styles.liveRoute, { color: colors.textPrimary }]} numberOfLines={1}>
-              {line.loop ? `${line.firstStop} · halka` : line.firstStop}
-            </Text>
-            <Text style={[styles.liveStatus, { color: colors.textSecondary }]}>
-              {locationLoading
-                ? 'Konum alınıyor...'
-                : nearestInfo
-                  ? `${formatDistance(nearestInfo.nearest.distanceMeters)} uzakta`
-                  : 'En yakın nokta yok'}
-            </Text>
-            {nextTime && (
-              <View style={styles.etaRow}>
-                <Text style={[styles.etaBig, { color: colors.textPrimary }]}>{nextTime}</Text>
-                <Text style={[styles.etaUnit, { color: colors.textSecondary }]}>sıradaki</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.liveBadge}>
-            <MaterialIcons name="airport-shuttle" size={26} color={colors.primaryLight} />
-          </View>
-        </View>
       </View>
 
-      {/* Gün çipleri */}
-      <View style={styles.chipRow}>
-        {DAY_TABS.map((tab) => {
-          const active = tab.key === day;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[
-                styles.chip,
-                active
-                  ? { backgroundColor: colors.primary }
-                  : { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
-              ]}
-              onPress={() => setDay(tab.key)}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.chipText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <View style={[styles.panel, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
+            <Text style={[styles.statusText, { color: colors.textSecondary }]}>Tarifeli dolmuş hattı</Text>
+          </View>
 
-      {/* Tarife */}
-      <ScrollView style={styles.schedule} contentContainerStyle={styles.scheduleContent}>
-        <Text style={[styles.scheduleTitle, { color: colors.textTertiary }]}>
-          İlk duraktan ({line.firstStop}) hareket saatleri
-        </Text>
-        {rows.length === 0 ? (
-          <Text style={[styles.empty, { color: colors.textTertiary }]}>Bu gün için saat bilgisi yok.</Text>
-        ) : (
-          rows.map(([hour, mins]) => (
-            <View key={hour} style={[styles.row, { borderBottomColor: colors.divider }]}>
-              <Text style={[styles.hour, { color: colors.primaryLight }]}>{hour}</Text>
-              <Text style={[styles.mins, { color: colors.textPrimary }]}>
-                {mins.map((m) => String(m).padStart(2, '0')).join('  ')}
+          {lines && lines.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.directionRow}>
+              {lines.map((option, index) => {
+                const active = index === selectedLineIndex;
+
+                return (
+                  <TouchableOpacity
+                    key={option.line}
+                    style={[
+                      styles.directionChip,
+                      {
+                        backgroundColor: active ? colors.primary : 'transparent',
+                        borderColor: active ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedLineIndex(index)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.directionChipText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>
+                      {directionLabel(option)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          <View style={[styles.routeCard, { backgroundColor: colors.surfaceSecondary }]}>
+            <View style={[styles.pinWrap, { backgroundColor: 'rgba(79, 70, 229, 0.16)' }]}>
+              <MaterialIcons name="place" size={24} color={colors.primaryLight} />
+            </View>
+            <View style={styles.routeText}>
+              <Text style={[styles.routeTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                {title}
+              </Text>
+              <Text style={[styles.routeMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                {directionLabel(line)}
               </Text>
             </View>
-          ))
-        )}
-      </ScrollView>
+          </View>
+
+          <View style={[styles.etaCard, { backgroundColor: colors.surfaceSecondary, borderLeftColor: lineColor }]}>
+            <View style={styles.etaTopRow}>
+              <View style={[styles.lineBadge, { backgroundColor: lineColor }]}>
+                <Text style={styles.lineBadgeText}>{title}</Text>
+              </View>
+              <Text style={[styles.nextTime, { color: colors.textSecondary }]}>
+                {nextPassing ? `${nextPassing.time} geçiş` : 'Sıradaki geçiş yok'}
+              </Text>
+            </View>
+
+            {locationLoading ? (
+              <Text style={[styles.etaHelp, { color: colors.textSecondary }]}>Konum alınıyor...</Text>
+            ) : nextPassing ? (
+              <>
+                <View style={styles.bigEtaRow}>
+                  <Text style={[styles.bigEta, { color: colors.textPrimary }]}>{nextPassing.etaMinutes}</Text>
+                  <Text style={[styles.bigEtaUnit, { color: colors.textPrimary }]}>dakika</Text>
+                </View>
+                <Text style={[styles.etaHelp, { color: colors.textSecondary }]}>
+                  Rotaya {nearestInfo ? formatDistance(nearestInfo.nearest.distanceMeters) : '-'} uzaktasın
+                </Text>
+              </>
+            ) : (
+              <Text style={[styles.etaHelp, { color: colors.textSecondary }]}>
+                Bugün için yaklaşan hareket saati bulunamadı.
+              </Text>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.scheduleCard, { backgroundColor: colors.surfaceSecondary }]}
+            onPress={() => setScheduleOpen((open) => !open)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.scheduleHeader}>
+              <Text style={[styles.scheduleTitle, { color: colors.textPrimary }]}>Hareket Saatleri</Text>
+              <MaterialIcons
+                name={scheduleOpen ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={26}
+                color={colors.textSecondary}
+              />
+            </View>
+            <Text style={[styles.scheduleSubtitle, { color: colors.textSecondary }]}>
+              İlk durak: {line.firstStop}
+            </Text>
+          </TouchableOpacity>
+
+          {scheduleOpen && (
+            <View style={[styles.scheduleList, { backgroundColor: colors.surfaceSecondary }]}>
+              <View style={styles.dayRow}>
+                {DAY_TABS.map((tab) => {
+                  const active = tab.key === day;
+                  return (
+                    <TouchableOpacity
+                      key={tab.key}
+                      style={[
+                        styles.dayChip,
+                        active
+                          ? { backgroundColor: colors.primary }
+                          : { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+                      ]}
+                      onPress={() => setDay(tab.key)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.dayChipText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {rows.length === 0 ? (
+                <Text style={[styles.empty, { color: colors.textTertiary }]}>Bu gün için saat bilgisi yok.</Text>
+              ) : (
+                rows.map(([hour, mins]) => (
+                  <View key={hour} style={[styles.scheduleRow, { borderBottomColor: colors.divider }]}>
+                    <Text style={[styles.hour, { color: colors.primaryLight }]}>{hour}</Text>
+                    <Text style={[styles.mins, { color: colors.textPrimary }]}>
+                      {mins.map((m) => String(m).padStart(2, '0')).join('  ')}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </View>
 
       <AppBottomNav active="home" onHome={onBack} />
     </View>
@@ -183,51 +272,139 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ line, onBack }
 const styles = StyleSheet.create({
   container: { flex: 1 },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  mapWrap: { flex: 1, minHeight: 220 },
+  mapWrap: { flex: 3, minHeight: 190 },
   webview: { flex: 1, backgroundColor: '#0B1326' },
-  liveCard: {
-    position: 'absolute',
-    top: 14,
-    left: 16,
-    right: 16,
+  panel: {
+    flex: 5,
+    borderTopWidth: 1,
+  },
+  panelScroll: { flex: 1 },
+  panelContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 18,
+    gap: 12,
+  },
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    gap: 8,
   },
-  liveKicker: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-  liveRoute: { fontSize: 16, fontWeight: '700', marginTop: 2 },
-  liveStatus: { fontSize: 13, marginTop: 2 },
-  etaRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 4 },
-  etaBig: { fontSize: 26, fontWeight: '800' },
-  etaUnit: { fontSize: 13 },
-  liveBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: { fontSize: 12 },
+  directionRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  directionChip: {
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: 'center',
+  },
+  directionChipText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  routeCard: {
+    minHeight: 78,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  pinWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
-  chip: {
+  routeText: { flex: 1, minWidth: 0 },
+  routeTitle: { fontSize: 16, lineHeight: 21, fontWeight: '800' },
+  routeMeta: { fontSize: 13, lineHeight: 18, marginTop: 2 },
+  etaCard: {
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    padding: 16,
+    minHeight: 126,
+  },
+  etaTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  lineBadge: {
+    minHeight: 28,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lineBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  nextTime: { fontSize: 12 },
+  bigEtaRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginTop: 10,
+  },
+  bigEta: {
+    fontSize: 48,
+    lineHeight: 58,
+    fontWeight: '800',
+  },
+  bigEtaUnit: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  etaHelp: {
+    marginTop: 4,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  scheduleCard: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  scheduleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  scheduleTitle: { fontSize: 15, lineHeight: 20, fontWeight: '800' },
+  scheduleSubtitle: { fontSize: 12, lineHeight: 18, marginTop: 2 },
+  scheduleList: {
+    borderRadius: 12,
+    padding: 12,
+  },
+  dayRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  dayChip: {
     flex: 1,
-    height: 40,
+    height: 38,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipText: { fontSize: 14, fontWeight: '700' },
-  schedule: { maxHeight: 240 },
-  scheduleContent: { paddingHorizontal: 16, paddingBottom: 16 },
-  scheduleTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', paddingVertical: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  dayChipText: { fontSize: 13, fontWeight: '700' },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   hour: { width: 42, fontSize: 15, fontWeight: '800' },
   mins: { flex: 1, fontSize: 14, letterSpacing: 1 },
   empty: { paddingVertical: 16, fontSize: 13 },
