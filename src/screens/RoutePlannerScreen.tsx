@@ -1,8 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
-  ImageSourcePropType,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,16 +9,13 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
-import { config } from '../config';
-import { buildOsmHtml } from '../components/Map/osmMapHtml';
-import { ScreenHeader } from '../components/common/ScreenHeader';
+import { AppTopBar } from '../components/common/AppTopBar';
+import { AppBottomNav } from '../components/common/AppBottomNav';
 import { useLocation } from '../hooks/useLocation';
 import journeyPlanner, { Journey, JourneyLeg, JourneyStop } from '../services/routing/JourneyPlanner';
-import tramService from '../services/tram/TramService';
 import { Coordinates } from '../types/shared-types';
-import { formatDistance } from '../utils/geo.utils';
 
 interface RoutePlannerScreenProps {
   onBack: () => void;
@@ -31,364 +26,266 @@ interface Destination {
   coordinates: Coordinates;
 }
 
-const MODE_ICONS: Partial<Record<string, ImageSourcePropType>> = {
-  bus: require('../../assets/menu-icons/bus.png'),
-  tram: require('../../assets/menu-icons/tram.png'),
-  dolmus: require('../../assets/menu-icons/dolmus.png'),
+type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
+
+const MODE_ICON: Record<string, IconName> = {
+  bus: 'directions-bus',
+  tram: 'tram',
+  dolmus: 'airport-shuttle',
 };
 
-function modeLabel(mode: string): string {
-  if (mode === 'bus') return 'Otobüs';
-  if (mode === 'tram') return 'Tramvay';
-  if (mode === 'dolmus') return 'Dolmuş';
-  return 'Yürü';
+function fmtTime(d: Date): string {
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
-const ModeIcon: React.FC<{ mode: string }> = ({ mode }) => {
-  const source = MODE_ICONS[mode];
-  if (!source) {
-    return <Text style={styles.walkIcon}>🚶</Text>;
-  }
-
-  return <Image source={source} style={styles.modeIcon} resizeMode="cover" />;
-};
-
 export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }) => {
-  const theme = useTheme();
-  const webViewRef = useRef<WebView>(null);
-  const [isReady, setIsReady] = useState(false);
+  const { colors } = useTheme();
   const [query, setQuery] = useState('');
   const [destination, setDestination] = useState<Destination | null>(null);
-  const [selectedJourneyIndex, setSelectedJourneyIndex] = useState(0);
   const { location, error: locationError, isLoading: locationLoading } = useLocation();
 
-  const html = useMemo(() => buildOsmHtml({ tileUrl: config.map.tileUrl }), []);
   const suggestions = useMemo(() => journeyPlanner.searchStops(query, 8), [query]);
   const journeys = useMemo(() => {
     if (!location || !destination) return [];
-    return journeyPlanner.plan(location, destination.coordinates, 1);
+    return journeyPlanner.plan(location, destination.coordinates, 3);
   }, [location, destination]);
-  const selectedJourney = journeys[selectedJourneyIndex] ?? journeys[0] ?? null;
-
-  const pushMapData = useCallback(() => {
-    const payload = JSON.stringify({
-      trams: tramService.getNetwork(),
-      userLocation: location,
-      stops: [],
-      buses: [],
-    });
-    webViewRef.current?.injectJavaScript(`window.updateMapData(${JSON.stringify(payload)}); true;`);
-  }, [location]);
-
-  const pushJourney = useCallback(() => {
-    const payload = JSON.stringify(selectedJourney);
-    webViewRef.current?.injectJavaScript(`window.updateJourneyData(${JSON.stringify(payload)}); true;`);
-  }, [selectedJourney]);
-
-  useEffect(() => {
-    if (selectedJourneyIndex >= journeys.length) {
-      setSelectedJourneyIndex(0);
-    }
-  }, [journeys.length, selectedJourneyIndex]);
-
-  useEffect(() => {
-    if (isReady) pushMapData();
-  }, [isReady, pushMapData]);
-
-  useEffect(() => {
-    if (isReady) pushJourney();
-  }, [isReady, pushJourney]);
 
   const handleDestinationSelect = (stop: JourneyStop) => {
     setDestination({ name: stop.name, coordinates: stop.coordinates });
     setQuery(stop.name);
-    setSelectedJourneyIndex(0);
   };
 
-  const handleMessage = useCallback((event: WebViewMessageEvent) => {
-    try {
-      const msg = JSON.parse(event.nativeEvent.data);
-      if (msg.type === 'ready') {
-        setIsReady(true);
-      } else if (msg.type === 'mapTap' && msg.coordinates) {
-        setDestination({ name: 'Haritadan seçilen nokta', coordinates: msg.coordinates });
-        setQuery('Haritadan seçilen nokta');
-        setSelectedJourneyIndex(0);
-      }
-    } catch {}
-  }, []);
+  const originText = locationLoading ? 'Konum alınıyor...' : locationError ? 'Konum yok' : 'Mevcut Konumum';
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-      <ScreenHeader title="Rota" subtitle="Otobüs, tramvay ve dolmuşla planla" onBack={onBack} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style="light" />
+      <AppTopBar onBack={onBack} />
 
-      <View style={styles.mapWrap}>
-        <WebView
-          ref={webViewRef}
-          style={styles.webview}
-          originWhitelist={['about:blank']}
-          source={{ html }}
-          javaScriptEnabled
-          domStorageEnabled={false}
-          allowFileAccess={false}
-          mixedContentMode="never"
-          onMessage={handleMessage}
-          androidLayerType="hardware"
-        />
-      </View>
-
-      <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent} keyboardShouldPersistTaps="handled">
-        <View style={[styles.searchCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}>
-          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Başlangıç</Text>
-          <Text style={[styles.originText, { color: theme.colors.textPrimary }]}>
-            {locationLoading ? 'Konum alınıyor...' : locationError ? locationError : 'Mevcut konumun'}
-          </Text>
-
-          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Hedef</Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: theme.colors.background,
-                borderColor: theme.colors.border,
-                color: theme.colors.textPrimary,
-              },
-            ]}
-            placeholder="Durak adı ara veya haritaya dokun"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={query}
-            onChangeText={(text) => {
-              setQuery(text);
-              setDestination(null);
-            }}
-          />
-
-          {!!query.trim() && !destination && (
-            <View style={styles.suggestions}>
-              {suggestions.map((stop) => (
-                <TouchableOpacity
-                  key={stop.id}
-                  style={[styles.suggestionRow, { borderBottomColor: theme.colors.borderLight }]}
-                  onPress={() => handleDestinationSelect(stop)}
-                >
-                  <View style={styles.suggestionTitleRow}>
-                    <ModeIcon mode={stop.mode} />
-                    <Text style={[styles.suggestionName, { color: theme.colors.textPrimary }]} numberOfLines={1}>
-                      {stop.name}
-                    </Text>
-                  </View>
-                  <Text style={[styles.suggestionMeta, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                    {modeLabel(stop.mode)} · {stop.lines.join(', ')}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        {/* Nereden / Nereye kartı */}
+        <View style={[styles.planCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.inputRow, { borderBottomColor: colors.divider }]}>
+            <MaterialIcons name="my-location" size={20} color={colors.textTertiary} />
+            <Text style={[styles.inputText, { color: colors.textPrimary }]} numberOfLines={1}>{originText}</Text>
+          </View>
+          <View style={styles.inputRow}>
+            <MaterialIcons name="location-on" size={20} color={colors.error} />
+            <TextInput
+              style={[styles.inputText, { color: colors.textPrimary, paddingVertical: 0 }]}
+              placeholder="Nereye"
+              placeholderTextColor={colors.textTertiary}
+              value={query}
+              onChangeText={(t) => { setQuery(t); setDestination(null); }}
+            />
+          </View>
+          <View style={[styles.swapBtn, { backgroundColor: '#3131C0' }]}>
+            <MaterialIcons name="swap-vert" size={20} color="#B0B2FF" />
+          </View>
         </View>
 
-        {locationLoading && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-            <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>Konum bekleniyor...</Text>
+        {/* Bağlam çipleri */}
+        <View style={styles.chipRow}>
+          <View style={[styles.chip, { backgroundColor: colors.primary }]}>
+            <MaterialIcons name="schedule" size={16} color="#FFFFFF" />
+            <Text style={[styles.chipText, { color: '#FFFFFF' }]}>Şimdi Çık</Text>
+          </View>
+          <View style={[styles.chip, styles.chipOutline, { borderColor: colors.border }]}>
+            <Text style={[styles.chipText, { color: colors.textSecondary }]}>Seçenekler</Text>
+          </View>
+        </View>
+
+        {/* Öneriler (yazarken) */}
+        {!!query.trim() && !destination && suggestions.length > 0 && (
+          <View style={[styles.suggestions, { backgroundColor: colors.surface }]}>
+            {suggestions.map((stop) => (
+              <TouchableOpacity
+                key={stop.id}
+                style={[styles.suggestionRow, { borderBottomColor: colors.divider }]}
+                onPress={() => handleDestinationSelect(stop)}
+              >
+                <MaterialIcons name={MODE_ICON[stop.mode] ?? 'place'} size={20} color={colors.primaryLight} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.suggestionName, { color: colors.textPrimary }]} numberOfLines={1}>{stop.name}</Text>
+                  <Text style={[styles.suggestionMeta, { color: colors.textSecondary }]} numberOfLines={1}>{stop.lines.join(', ')}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
 
-        {destination && !locationLoading && !locationError && journeys.length === 0 && (
-          <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-            Bu hedef için 450 m çevrede uygun direkt veya tek aktarmalı seçenek bulunamadı.
-          </Text>
-        )}
+        {/* Önerilen güzergahlar */}
+        {destination && (
+          <>
+            <Text style={[styles.h2, { color: colors.textPrimary }]}>Önerilen Güzergahlar</Text>
 
-        {journeys.map((journey, index) => (
-          <JourneyCard
-            key={`${journey.score}-${index}`}
-            journey={journey}
-            selected={index === selectedJourneyIndex}
-            onPress={() => setSelectedJourneyIndex(index)}
-          />
-        ))}
+            {locationLoading && (
+              <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>
+            )}
+
+            {!locationLoading && journeys.length === 0 && (
+              <Text style={[styles.info, { color: colors.textSecondary }]}>
+                Bu hedef için uygun direkt veya tek aktarmalı seçenek bulunamadı.
+              </Text>
+            )}
+
+            {journeys.map((journey, index) => (
+              <JourneyCard key={`${journey.score}-${index}`} journey={journey} fastest={index === 0} />
+            ))}
+          </>
+        )}
       </ScrollView>
+
+      <AppBottomNav active="home" onHome={onBack} />
     </View>
   );
 };
 
-const JourneyCard: React.FC<{
-  journey: Journey;
-  selected: boolean;
-  onPress: () => void;
-}> = ({ journey, selected, onPress }) => {
-  const theme = useTheme();
+const JourneyCard: React.FC<{ journey: Journey; fastest: boolean }> = ({ journey, fastest }) => {
+  const { colors } = useTheme();
+  const accent = fastest ? colors.primary : colors.warning;
+  const now = new Date();
+  const end = new Date(now.getTime() + journey.totalApproxMin * 60000);
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.journeyCard,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: selected ? theme.colors.primary : theme.colors.borderLight,
-        },
-      ]}
-      onPress={onPress}
-      activeOpacity={0.78}
-    >
-      <View style={styles.journeyHeader}>
-        <Text style={[styles.journeyTitle, { color: theme.colors.textPrimary }]}>~{journey.totalApproxMin} dk</Text>
-        <Text style={[styles.transferText, { color: theme.colors.textSecondary }]}>
-          {journey.transfers === 0 ? 'Direkt' : `${journey.transfers} aktarma`}
-        </Text>
+    <View style={[styles.routeCard, { backgroundColor: colors.surface, borderLeftColor: accent }]}>
+      <View style={styles.routeHeader}>
+        <View>
+          <View style={styles.minRow}>
+            <Text style={[styles.minBig, { color: fastest ? colors.primaryLight : colors.textPrimary }]}>{journey.totalApproxMin}</Text>
+            <Text style={[styles.minUnit, { color: colors.textSecondary }]}>dk</Text>
+          </View>
+          <Text style={[styles.timeRange, { color: colors.textSecondary }]}>{fmtTime(now)} - {fmtTime(end)}</Text>
+        </View>
+        <View style={[styles.badge, { backgroundColor: accent + '29' }]}>
+          <MaterialIcons name={fastest ? 'bolt' : 'accessible'} size={15} color={accent} />
+          <Text style={[styles.badgeText, { color: accent }]}>{fastest ? 'En Hızlı' : 'Alternatif'}</Text>
+        </View>
       </View>
-      <View style={styles.legs}>
-        {journey.legs.map((leg, index) => (
-          <LegRow key={`${leg.type}-${index}`} leg={leg} />
+
+      {/* Rota zaman çizelgesi */}
+      <View style={styles.timeline}>
+        {journey.legs.map((leg, i) => (
+          <React.Fragment key={`${leg.type}-${i}`}>
+            {i > 0 && <MaterialIcons name="chevron-right" size={16} color={colors.textTertiary} />}
+            <LegChip leg={leg} />
+          </React.Fragment>
         ))}
       </View>
-    </TouchableOpacity>
+
+      <View style={styles.detailRow}>
+        <Text style={[styles.detailText, { color: colors.primaryLight }]}>Detayları Gör</Text>
+        <MaterialIcons name="arrow-forward" size={16} color={colors.primaryLight} />
+      </View>
+    </View>
   );
 };
 
-const LegRow: React.FC<{ leg: JourneyLeg }> = ({ leg }) => {
-  const theme = useTheme();
-
+const LegChip: React.FC<{ leg: JourneyLeg }> = ({ leg }) => {
+  const { colors } = useTheme();
   if (leg.type === 'walk') {
     return (
-      <View style={styles.legRow}>
-        <Text style={styles.walkIcon}>🚶</Text>
-        <Text style={[styles.legText, { color: theme.colors.textSecondary }]}>
-          {formatDistance(leg.distanceMeters)} yürü · ~{leg.approxMin} dk
-        </Text>
+      <View style={styles.walkChip}>
+        <MaterialIcons name="directions-walk" size={16} color={colors.textSecondary} />
+        <Text style={[styles.walkText, { color: colors.textSecondary }]}>{leg.approxMin} dk</Text>
       </View>
     );
   }
-
   return (
-    <View style={styles.legRow}>
-      <ModeIcon mode={leg.mode} />
-      <Text style={[styles.legText, { color: theme.colors.textPrimary }]}>
-        {leg.line} · {leg.numStops} durak · {leg.fromStop.name} → {leg.toStop.name} · ~{leg.approxMin} dk
-      </Text>
+    <View style={[styles.transitChip, { backgroundColor: colors.surfaceSecondary }]}>
+      <MaterialIcons name={MODE_ICON[leg.mode] ?? 'directions-bus'} size={16} color={colors.primaryLight} />
+      <Text style={[styles.transitText, { color: colors.textPrimary }]}>{leg.line}</Text>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24, gap: 16 },
+  planCard: {
+    borderRadius: 12,
+    padding: 4,
+    position: 'relative',
   },
-  mapWrap: {
-    flex: 1,
-    minHeight: 230,
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: '#e5e7eb',
-  },
-  panel: {
-    maxHeight: 390,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  panelContent: {
-    padding: 12,
-    gap: 10,
-  },
-  searchCard: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    gap: 8,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  originText: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  input: {
-    height: 44,
-    borderWidth: 1,
-    borderRadius: 8,
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 12,
-    fontSize: 15,
+    height: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  suggestions: {
-    gap: 0,
-  },
-  suggestionRow: {
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    gap: 2,
-  },
-  suggestionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  suggestionName: {
+  inputText: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  suggestionMeta: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  infoText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  journeyCard: {
-    borderWidth: 2,
-    borderRadius: 8,
-    padding: 12,
-    gap: 8,
-  },
-  journeyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  journeyTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  transferText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  legs: {
-    gap: 5,
-  },
-  legRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  modeIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    marginTop: 1,
-  },
-  walkIcon: {
-    width: 22,
     fontSize: 16,
-    lineHeight: 21,
-    textAlign: 'center',
   },
-  legText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
+  swapBtn: {
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    marginTop: -20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  chipRow: { flexDirection: 'row', gap: 8 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+  },
+  chipOutline: { borderWidth: 1 },
+  chipText: { fontSize: 14, fontWeight: '700' },
+  suggestions: { borderRadius: 12, overflow: 'hidden' },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  suggestionName: { fontSize: 15, fontWeight: '600' },
+  suggestionMeta: { fontSize: 12, marginTop: 1 },
+  h2: { fontSize: 20, fontWeight: '600', marginTop: 4 },
+  info: { fontSize: 14, lineHeight: 20 },
+  center: { paddingVertical: 20, alignItems: 'center' },
+  routeCard: {
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    padding: 16,
+    gap: 12,
+  },
+  routeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  minRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  minBig: { fontSize: 28, fontWeight: '700' },
+  minUnit: { fontSize: 16 },
+  timeRange: { fontSize: 12, marginTop: 2 },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  badgeText: { fontSize: 12, fontWeight: '600' },
+  timeline: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  walkChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  walkText: { fontSize: 12 },
+  transitChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  transitText: { fontSize: 14, fontWeight: '700' },
+  detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  detailText: { fontSize: 12, fontWeight: '500' },
 });
