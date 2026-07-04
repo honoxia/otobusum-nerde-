@@ -31,6 +31,10 @@ export const config = {
   // Wialon Nimbus locator hash (Eskişehir otobüsleri için)
   nimbus: {
     locatorHash: extra.NIMBUS_LOCATOR_HASH || process.env.NIMBUS_LOCATOR_HASH || '4d5af2578d1f42adabc3165aa4456953',
+    tramLocatorHash:
+      extra.TRAM_NIMBUS_LOCATOR_HASH ||
+      process.env.EXPO_PUBLIC_TRAM_NIMBUS_LOCATOR_HASH ||
+      '5c077c2d20424be7a354bb622fd6834e',
   },
   // Harita modu: 'osm' (varsayılan, ücretsiz) veya 'google' (key gerektirir)
   map: {
