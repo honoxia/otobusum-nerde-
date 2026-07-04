@@ -17,9 +17,11 @@ interface TramScreenProps {
 }
 
 const offsetSourceLabels = {
-  measured: 'measured',
-  'fixed-interval': 'fixed-interval',
+  measured: 'Beklenen saat',
+  'fixed-interval': 'Tahmini saat',
 } as const;
+
+const LIVE_MATCH_TOLERANCE_MINUTES = 4;
 
 interface TramDisplayArrival {
   key: string;
@@ -28,6 +30,7 @@ interface TramDisplayArrival {
   arrivalTime: string;
   etaMinutes: number;
   metaLabel: string;
+  source?: 'live' | 'expected';
 }
 
 export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
@@ -58,7 +61,7 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
         lineRef: arrival.lineRef,
         arrivalTime: arrival.arrivalTime,
         etaMinutes: arrival.etaMinutes,
-        metaLabel: 'Canlı Nimbus',
+        metaLabel: 'Canlı',
       }));
     }
 
@@ -71,9 +74,47 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
       metaLabel: offsetSourceLabels[arrival.offsetSource],
     }));
   }, [liveStopArrivals, nearestStop]);
-  const hasLiveArrivals = Boolean(liveStopArrivals?.arrivals.length);
-  const primaryArrival = displayArrivals[0];
-  const nextArrivals = displayArrivals.slice(1, 4);
+  const liveArrivals = useMemo<TramDisplayArrival[]>(() => {
+    return (liveStopArrivals?.arrivals || []).map((arrival) => ({
+      key: `nimbus-${arrival.routeId}-${arrival.arrivalTime}-${arrival.etaMinutes}`,
+      routeName: arrival.routeName,
+      lineRef: arrival.lineRef,
+      arrivalTime: arrival.arrivalTime,
+      etaMinutes: arrival.etaMinutes,
+      metaLabel: 'Canlı',
+      source: 'live',
+    }));
+  }, [liveStopArrivals]);
+  const expectedArrivals = useMemo<TramDisplayArrival[]>(() => {
+    return (nearestStop?.arrivals || []).map((arrival) => ({
+      key: `schedule-${arrival.routeId}-${arrival.arrivalTime}-${arrival.etaMinutes}`,
+      routeName: arrival.routeName,
+      lineRef: arrival.lineRef,
+      arrivalTime: arrival.arrivalTime,
+      etaMinutes: arrival.etaMinutes,
+      metaLabel: offsetSourceLabels[arrival.offsetSource],
+      source: 'expected',
+    }));
+  }, [nearestStop]);
+  const selectedArrivals = useMemo<TramDisplayArrival[]>(() => {
+    if (!liveArrivals.length) return expectedArrivals;
+
+    const firstLive = liveArrivals[0];
+    const matchingExpected =
+      expectedArrivals.find((arrival) => arrival.lineRef === firstLive.lineRef) || expectedArrivals[0];
+
+    if (!matchingExpected) return liveArrivals;
+
+    const diffMinutes = firstLive.etaMinutes - matchingExpected.etaMinutes;
+    if (Math.abs(diffMinutes) <= LIVE_MATCH_TOLERANCE_MINUTES) return liveArrivals;
+    if (diffMinutes > 0) return expectedArrivals;
+
+    return liveArrivals;
+  }, [expectedArrivals, liveArrivals]);
+  const hasLiveArrivals = liveArrivals.length > 0;
+  const primaryArrival = selectedArrivals[0] || displayArrivals[0];
+  const primaryIsLive = primaryArrival?.source === 'live';
+  const nextArrivals = (selectedArrivals.length ? selectedArrivals : displayArrivals).slice(1, 4);
   const estimatedNextHour = useMemo(() => {
     if (!nearestStop) return [];
 
@@ -164,11 +205,11 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
           <View
             style={[
               styles.statusDot,
-              { backgroundColor: hasLiveArrivals ? theme.colors.success : liveChecked ? theme.colors.warning : theme.colors.textTertiary },
+              { backgroundColor: primaryIsLive ? theme.colors.success : primaryArrival ? theme.colors.warning : theme.colors.textTertiary },
             ]}
           />
           <Text style={[styles.statusText, { color: theme.colors.textSecondary }]}>
-            {hasLiveArrivals ? 'Canlı Nimbus' : liveChecked ? 'Tarifeli tahmin' : 'Nimbus kontrol ediliyor'}
+            {primaryIsLive ? 'Canlı' : primaryArrival ? 'Beklenen' : liveChecked ? 'Tarifeli tahmin' : 'Canlı veri kontrol ediliyor'}
           </Text>
         </View>
 
@@ -215,7 +256,7 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
                 styles.etaCard,
                 {
                   backgroundColor: theme.colors.surfaceSecondary,
-                  borderLeftColor: hasLiveArrivals ? theme.colors.success : theme.colors.primary,
+                  borderLeftColor: primaryIsLive ? theme.colors.success : theme.colors.primary,
                 },
               ]}
             >
@@ -226,7 +267,7 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
                       <View
                         style={[
                           styles.lineBadge,
-                          { backgroundColor: hasLiveArrivals ? theme.colors.success : theme.colors.primary },
+                          { backgroundColor: primaryIsLive ? theme.colors.success : theme.colors.primary },
                         ]}
                       >
                         <Text style={styles.lineBadgeText}>{primaryArrival.lineRef}</Text>
@@ -234,7 +275,7 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
                       <Text
                         style={[
                           styles.etaStatusText,
-                          { color: hasLiveArrivals ? theme.colors.success : theme.colors.primaryLight },
+                          { color: primaryIsLive ? theme.colors.success : theme.colors.primaryLight },
                         ]}
                       >
                         {primaryArrival.metaLabel}
@@ -344,10 +385,10 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
           )}
           <Text style={[styles.note, { color: theme.colors.textTertiary }]}>
             {hasLiveArrivals
-              ? `Nimbus canlı durak verisi kullanılıyor (${liveStopArrivals?.nimbusStopName || 'tramvay durağı'}).`
+              ? `Canlı durak verisi kullanılıyor (${liveStopArrivals?.nimbusStopName || 'tramvay durağı'}).`
               : liveChecked
-                ? 'Nimbus verisi alınamazsa yaz tarifesi ve durak sırası tahmini kullanılır.'
-                : 'Canlı Nimbus verisi kontrol ediliyor; bu sırada tarifeli tahmin korunur.'}
+                ? 'Canlı veri alınamazsa yaz tarifesi ve durak sırası tahmini kullanılır.'
+                : 'Canlı veri kontrol ediliyor; bu sırada tarifeli tahmin korunur.'}
           </Text>
         </View>
 
