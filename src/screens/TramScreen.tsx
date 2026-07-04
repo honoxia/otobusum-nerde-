@@ -36,14 +36,15 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
   const [isReady, setIsReady] = useState(false);
   const [liveStopArrivals, setLiveStopArrivals] = useState<LiveTramStopArrivals | null>(null);
   const [liveChecked, setLiveChecked] = useState(false);
+  const [scheduleNow, setScheduleNow] = useState(() => new Date());
   const { location, error: locationError, isLoading: locationLoading } = useLocation();
 
   const html = useMemo(() => buildOsmHtml({ tileUrl: config.map.tileUrl }), []);
   const network = useMemo(() => tramService.getNetwork(), []);
   const nearestStop = useMemo(() => {
     if (!location) return null;
-    return tramService.getUpcomingArrivalsForNearestStop(location);
-  }, [location]);
+    return tramService.getUpcomingArrivalsForNearestStop(location, scheduleNow);
+  }, [location, scheduleNow]);
   const visibleLines = useMemo(() => {
     if (!nearestStop?.stop.lines.length) return network.lines;
 
@@ -73,6 +74,13 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
   const hasLiveArrivals = Boolean(liveStopArrivals?.arrivals.length);
   const primaryArrival = displayArrivals[0];
   const nextArrivals = displayArrivals.slice(1, 4);
+  const estimatedNextHour = useMemo(() => {
+    if (!nearestStop) return [];
+
+    return tramService
+      .getUpcomingArrivalsForStop(nearestStop.stop, scheduleNow, 40)
+      .filter((arrival) => arrival.etaMinutes >= 0 && arrival.etaMinutes <= 60);
+  }, [nearestStop?.stop.id, scheduleNow]);
 
   const pushMapData = useCallback(() => {
     const payload = JSON.stringify({
@@ -87,6 +95,11 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
   useEffect(() => {
     if (isReady) pushMapData();
   }, [isReady, pushMapData]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setScheduleNow(new Date()), 60000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
@@ -359,6 +372,54 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
             </View>
           ))}
         </View>
+
+        {nearestStop && (
+          <View style={[styles.estimateCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={[styles.scheduleHeader, { borderBottomColor: theme.colors.divider }]}>
+              <Text style={[styles.scheduleTitle, { color: theme.colors.textPrimary }]}>
+                1 Saat İçindeki Tahmini Seferler
+              </Text>
+              <Text style={[styles.estimateSubtitle, { color: theme.colors.textSecondary }]}>
+                Uygulama hesabı · Nimbus'tan bağımsız
+              </Text>
+            </View>
+            {estimatedNextHour.length > 0 ? (
+              estimatedNextHour.map((arrival, index) => (
+                <View
+                  key={`estimate-${arrival.routeId}-${arrival.arrivalTime}-${index}`}
+                  style={[
+                    styles.scheduleRow,
+                    index < estimatedNextHour.length - 1 && {
+                      borderBottomColor: theme.colors.divider,
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                    },
+                  ]}
+                >
+                  <View style={styles.scheduleLeft}>
+                    <View style={[styles.schedBadge, { backgroundColor: theme.colors.surfaceSecondary }]}>
+                      <Text style={[styles.schedBadgeText, { color: theme.colors.textPrimary }]}>{arrival.lineRef}</Text>
+                    </View>
+                    <View style={styles.scheduleTextCol}>
+                      <Text style={[styles.schedDir, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+                        {arrival.routeName}
+                      </Text>
+                      <Text style={[styles.schedMeta, { color: theme.colors.textSecondary }]}>
+                        {arrival.arrivalTime} · {offsetSourceLabels[arrival.offsetSource]}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.schedEta, { color: index === 0 ? theme.colors.primaryLight : theme.colors.textSecondary }]}>
+                    {arrival.etaMinutes} dk
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.estimateEmpty, { color: theme.colors.textSecondary }]}>
+                Önümüzdeki 1 saat içinde tarifeli geçiş görünmüyor.
+              </Text>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -504,6 +565,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 8,
   },
+  estimateCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
   scheduleHeader: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -512,6 +577,17 @@ const styles = StyleSheet.create({
   scheduleTitle: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  estimateSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  estimateEmpty: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 13,
+    fontWeight: '600',
   },
   scheduleRow: {
     flexDirection: 'row',
