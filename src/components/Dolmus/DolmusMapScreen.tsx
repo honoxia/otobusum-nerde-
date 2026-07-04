@@ -55,6 +55,7 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
   const [day, setDay] = useState<DayKey>(todayKey());
   const [selectedLineIndex, setSelectedLineIndex] = useState(0);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleNow, setScheduleNow] = useState(() => new Date());
   const { location, isLoading: locationLoading } = useLocation();
 
   const line = lines?.[selectedLineIndex] ?? lines?.[0] ?? null;
@@ -77,8 +78,8 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
   const activeLeg = legInfos[activeLegIndex] ?? legInfos[0] ?? null;
   const nextPassings = useMemo(() => {
     if (!line || !activeLeg) return [];
-    return dolmusService.getNextPassings(line, activeLeg.minutesList, new Date(), 3);
-  }, [line, activeLeg]);
+    return dolmusService.getNextPassings(line, activeLeg.minutesList, scheduleNow, 3);
+  }, [line, activeLeg, scheduleNow]);
 
   const pushDolmus = useCallback(() => {
     if (!line) return;
@@ -104,6 +105,11 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
   useEffect(() => {
     setSelectedLegIndex(null);
   }, [selectedLineIndex, lines]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setScheduleNow(new Date()), 30000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   useEffect(() => { pushDolmus(); }, [pushDolmus]);
 
