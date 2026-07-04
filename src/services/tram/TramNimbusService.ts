@@ -61,6 +61,7 @@ export interface LiveTramStopArrivals {
 
 const FEED_CACHE_TTL_MS = 5 * 60 * 1000;
 const STOP_MATCH_MAX_DISTANCE_METERS = 140;
+const STALE_LIVE_ARRIVAL_SECONDS = 2 * 60;
 
 function nimbusStopCoordinates(stop: NimbusStop): Coordinates | null {
   const point = stop.p?.[0];
@@ -143,8 +144,15 @@ class TramNimbusService {
           const etaSeconds = item.eta?.tt;
           if (typeof etaSeconds !== 'number' || etaSeconds < 0 || etaSeconds > 24 * 60 * 60) continue;
 
+          if (item.pt && item.pt < serverTime - STALE_LIVE_ARRIVAL_SECONDS) {
+            devLog(
+              `[TramNimbus] stale arrival skipped: route=${routeGroup.id} pt=${item.pt} server=${serverTime} eta=${etaSeconds}`
+            );
+            continue;
+          }
+
           const etaMinutes = Math.max(0, Math.round(etaSeconds / 60));
-          const arrivalEpoch = item.pt || serverTime + etaSeconds;
+          const arrivalEpoch = serverTime + etaSeconds;
 
           arrivals.push({
             routeId: routeGroup.id,
