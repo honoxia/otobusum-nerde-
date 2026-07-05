@@ -4,6 +4,7 @@ const path = require('path');
 const stopsData = require('../src/data/stops-data.json');
 const routesData = require('../src/data/routes-data.json');
 const tramData = require('../src/data/tram-data.json');
+const tramScheduleData = require('../src/data/tram-schedule.json');
 const dolmusData = require('../src/data/dolmus-data.json');
 
 const OUT_DIR = path.join(__dirname, '..', 'src', 'data', 'transit');
@@ -24,6 +25,20 @@ const DEFAULT_WAIT_MIN = {
 const WALK_SPEED_M_PER_MIN = 5000 / 60;
 const TRANSFER_RADIUS_M = 250;
 const MAX_TRANSFERS_PER_STOP = 6;
+
+const TRAM_ROUTE_CONFIG = {
+  '845': { lineRef: '36', from: 'OGU', to: 'OTOGAR' },
+  '846': { lineRef: '36', from: 'OTOGAR', to: 'OGU' },
+  '847': { lineRef: 'T9', from: 'SSK', to: 'CAMLICA' },
+  '849': { lineRef: 'T8', from: 'SSK', to: 'BATIKENT' },
+  '851': { lineRef: '7', from: 'OGU', to: 'CANKAYA' },
+  '852': { lineRef: '7', from: 'CANKAYA', to: 'OGU' },
+  '853': { lineRef: '12', from: 'OGU', to: '75.YIL' },
+  '857': { lineRef: 'T4', from: 'OGU', to: 'OTOGAR' },
+  '859': { lineRef: 'T3', from: 'SSK', to: 'OGU' },
+  '861': { lineRef: 'T1', from: 'SSK', to: 'OTOGAR' },
+  '856': { lineRef: 'T10', from: 'SEHIR HASTANESI', to: 'KUMLUBEL' },
+};
 
 function readExistingGeneratedAt() {
   try {
@@ -108,6 +123,29 @@ function slugify(value) {
   );
 }
 
+function normalizeRouteText(value) {
+  return String(value || '')
+    .toLocaleUpperCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u0130/g, 'I')
+    .replace(/\u015E/g, 'S')
+    .replace(/\u011E/g, 'G')
+    .replace(/\u00DC/g, 'U')
+    .replace(/\u00D6/g, 'O')
+    .replace(/\u00C7/g, 'C')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function canonicalTramEndpoint(value) {
+  const normalized = normalizeRouteText(value);
+  if (normalized === 'OGU' || normalized === 'OSMANGAZI' || normalized === 'OSMANGAZI UNIVERSITESI') {
+    return 'OGU';
+  }
+  return normalized;
+}
+
 function directionKey(direction, index) {
   const normalized = slugify(direction);
   if (normalized.includes('gidis')) return 'gidis';
@@ -136,6 +174,18 @@ function collectDepartures(daySchedule) {
     .flatMap(([hour, minutes]) => (minutes || []).map((minute) => Number(hour) * 60 + minute))
     .filter((minute) => Number.isFinite(minute))
     .sort((a, b) => a - b);
+}
+
+function departureSchedule(id, patternId, serviceId, sourceRouteId, departures) {
+  if (departures.length === 0) return null;
+
+  return {
+    id,
+    patternId,
+    serviceId,
+    sourceRouteId,
+    departureMins: departures,
+  };
 }
 
 function frequencyFromDepartures(id, patternId, serviceId, departures) {
@@ -170,12 +220,40 @@ function orderTramStops(line, stops) {
     .map((entry) => entry.stop);
 }
 
+function tramEndpoints(line) {
+  if (line.from || line.to) {
+    return {
+      from: canonicalTramEndpoint(line.from),
+      to: canonicalTramEndpoint(line.to),
+    };
+  }
+
+  const parts = String(line.name || '')
+    .split(/\s[-–]\s/)
+    .map((part) => normalizeRouteText(part));
+
+  return {
+    from: canonicalTramEndpoint(parts[0] || ''),
+    to: canonicalTramEndpoint(parts[parts.length - 1] || ''),
+  };
+}
+
+function matchingTramScheduleRoute(line) {
+  const endpoints = tramEndpoints(line);
+
+  return Object.entries(TRAM_ROUTE_CONFIG).find(([, config]) => {
+    if (config.lineRef !== line.ref) return false;
+    return canonicalTramEndpoint(config.from) === endpoints.from && canonicalTramEndpoint(config.to) === endpoints.to;
+  });
+}
+
 function buildGraph() {
   const stops = [];
   const routes = [];
   const patterns = [];
   const shapes = [];
   const frequencies = [];
+  const departures = [];
   const routeIds = new Set();
 
   const busStopBySourceId = new Map();
@@ -257,6 +335,30 @@ function buildGraph() {
     }
 
     if (patternStops.length < 2) return;
+    const matchingScheduleRoute = matchingTramScheduleRoute(line);
+    const scheduleIds = [];
+    if (matchingScheduleRoute) {
+      const [sourceRouteId] = matchingScheduleRoute;
+      [
+        ['weekday', 'weekday'],
+        ['saturday', 'weekday'],
+        ['sunday', 'sunday'],
+      ].forEach(([serviceId, sourceServiceId]) => {
+        const scheduleId = `${patternId}:${serviceId}`;
+        const schedule = departureSchedule(
+          scheduleId,
+          patternId,
+          serviceId,
+          sourceRouteId,
+          collectDepartures(tramScheduleData.routes?.[sourceRouteId]?.[sourceServiceId])
+        );
+        if (schedule) {
+          scheduleIds.push(scheduleId);
+          departures.push(schedule);
+        }
+      });
+    }
+
     patterns.push({
       id: patternId,
       routeId: id,
@@ -269,6 +371,7 @@ function buildGraph() {
       stopIds: patternStops.map((stop) => stop.id),
       segmentMeters: segmentMeters(patternStops, shapeCoordinates),
       shapeId,
+      scheduleIds,
       defaultWaitMin: DEFAULT_WAIT_MIN.tram,
     });
     shapes.push({ id: shapeId, patternId, coordinates: shapeCoordinates });
@@ -358,6 +461,7 @@ function buildGraph() {
         generatedAt: GENERATED_AT,
       },
       frequencies,
+      departures,
     },
   };
 }
@@ -489,6 +593,19 @@ function assertValidGraph(graph) {
     }
   });
 
+  graph.schedules.departures.forEach((schedule) => {
+    if (!patternIds.has(schedule.patternId)) {
+      errors.push(`Departure schedule ${schedule.id} references missing pattern ${schedule.patternId}`);
+    }
+    if (!schedule.departureMins.length) {
+      errors.push(`Departure schedule ${schedule.id} has no departures`);
+    }
+    const sorted = [...schedule.departureMins].sort((a, b) => a - b);
+    if (sorted.some((minute, index) => minute !== schedule.departureMins[index] || minute < 0 || minute >= 1440)) {
+      errors.push(`Departure schedule ${schedule.id} has invalid departure minutes`);
+    }
+  });
+
   if (errors.length) {
     throw new Error(`Transit graph validation failed:\n- ${errors.join('\n- ')}`);
   }
@@ -517,6 +634,6 @@ const sizes = {
 };
 
 console.log(
-  `Transit graph built: ${graph.core.stops.length} stops, ${graph.core.routes.length} routes, ${graph.core.patterns.length} patterns, ${graph.core.transfers.length} transfers, ${graph.shapes.shapes.length} shapes, ${graph.schedules.frequencies.length} frequencies`
+  `Transit graph built: ${graph.core.stops.length} stops, ${graph.core.routes.length} routes, ${graph.core.patterns.length} patterns, ${graph.core.transfers.length} transfers, ${graph.shapes.shapes.length} shapes, ${graph.schedules.frequencies.length} frequencies, ${graph.schedules.departures.length} departure schedules`
 );
 console.log(`Transit graph sizes: core=${sizes.core}B shapes=${sizes.shapes}B schedules=${sizes.schedules}B`);

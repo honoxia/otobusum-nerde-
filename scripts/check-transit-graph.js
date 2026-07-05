@@ -54,12 +54,14 @@ function main() {
   assert(core.transfers.length > 1000, `Expected transfer graph, got ${core.transfers.length} transfers`);
   assert(shapes.shapes.length > 0, 'Expected shapes to be split into shapes.json');
   assert(schedules.frequencies.length > 0, 'Expected dolmus frequencies in schedules.json');
+  assert(schedules.departures.length > 0, 'Expected tram departure schedules in schedules.json');
 
   assertNoDuplicates('Stops', core.stops.map((stop) => stop.id));
   assertNoDuplicates('Routes', core.routes.map((route) => route.id));
   assertNoDuplicates('Patterns', core.patterns.map((pattern) => pattern.id));
   assertNoDuplicates('Shapes', shapes.shapes.map((shape) => shape.id));
   assertNoDuplicates('Frequencies', schedules.frequencies.map((frequency) => frequency.id));
+  assertNoDuplicates('Departure schedules', schedules.departures.map((schedule) => schedule.id));
 
   const stopIds = new Set(core.stops.map((stop) => stop.id));
   const routeIds = new Set(core.routes.map((route) => route.id));
@@ -117,8 +119,21 @@ function main() {
     assert(frequency.headwayMin > 0, `Frequency ${frequency.id} has invalid headway`);
   });
 
+  schedules.departures.forEach((schedule) => {
+    assert(patternIds.has(schedule.patternId), `Departure schedule ${schedule.id} references missing pattern`);
+    assert(schedule.departureMins.length > 0, `Departure schedule ${schedule.id} has no departures`);
+    schedule.departureMins.forEach((minute, index) => {
+      assert(minute >= 0 && minute < 1440, `Departure schedule ${schedule.id} has minute outside day`);
+      if (index > 0) {
+        assert(minute >= schedule.departureMins[index - 1], `Departure schedule ${schedule.id} is not sorted`);
+      }
+    });
+  });
+
   const dolmusPatterns = core.patterns.filter((pattern) => pattern.mode === 'dolmus');
   assert(dolmusPatterns.every((pattern) => pattern.scheduleIds?.length), 'Every dolmus pattern must reference schedules');
+  const tramPatterns = core.patterns.filter((pattern) => pattern.mode === 'tram');
+  assert(tramPatterns.some((pattern) => pattern.scheduleIds?.length), 'Expected tram patterns to reference schedules');
 
   const samplePattern = core.patterns.find((pattern) => pattern.stopIds.length >= 4);
   assert(samplePattern, 'Expected at least one pattern with 4+ stops for route smoke check');

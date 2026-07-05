@@ -1,7 +1,15 @@
 import graphCoreData from '../../data/transit/graph-core.json';
+import schedulesData from '../../data/transit/schedules.json';
 import { config } from '../../config';
 import { Coordinates } from '../../types/shared-types';
-import type { TransitGraphCore, TransitGraphPattern } from '../../data/transit/types';
+import type {
+  TransitDepartureSchedule,
+  TransitFrequency,
+  TransitGraphCore,
+  TransitGraphPattern,
+  TransitGraphSchedules,
+  TransitServiceId,
+} from '../../data/transit/types';
 import { calculateHaversineDistance } from '../../utils/geo.utils';
 
 export type TransitMode = 'bus' | 'tram' | 'dolmus' | 'walk';
@@ -54,6 +62,7 @@ interface LinePattern {
   line: string;
   stops: JourneyStop[];
   segmentMeters?: number[];
+  scheduleIds?: string[];
   defaultWaitMin: number;
 }
 
@@ -69,6 +78,7 @@ interface PatternStopMatch {
 
 const WALK_SPEED_M_PER_MIN = 5000 / 60;
 const TRANSFER_PENALTY_MIN = 6;
+const MINUTES_PER_DAY = 24 * 60;
 
 function walkingMinutes(distanceMeters: number): number {
   return distanceMeters / WALK_SPEED_M_PER_MIN;
@@ -108,6 +118,8 @@ class JourneyPlanner {
   private readonly patterns: LinePattern[] = [];
   private readonly stopPatternIndex = new Map<string, PatternStopMatch[]>();
   private readonly transferIndex = new Map<string, NearbyStop[]>();
+  private readonly frequenciesByPattern = new Map<string, TransitFrequency[]>();
+  private readonly departuresByPattern = new Map<string, TransitDepartureSchedule[]>();
 
   constructor() {
     this.buildIndexes();
@@ -122,7 +134,7 @@ class JourneyPlanner {
       .slice(0, limit);
   }
 
-  plan(origin: Coordinates, destination: Coordinates, maxTransfers = 1, resultLimit = 5): Journey[] {
+  plan(origin: Coordinates, destination: Coordinates, maxTransfers = 1, resultLimit = 5, now = new Date()): Journey[] {
     const originStops = this.nearbyStops(origin, 650, 12);
     const destinationStops = this.nearbyStops(destination, 650, 12);
 
@@ -131,10 +143,10 @@ class JourneyPlanner {
     }
 
     const journeys: Journey[] = [];
-    journeys.push(...this.findDirectJourneys(origin, destination, originStops, destinationStops));
+    journeys.push(...this.findDirectJourneys(origin, destination, originStops, destinationStops, now));
 
     if (maxTransfers >= 1) {
-      journeys.push(...this.findOneTransferJourneys(origin, destination, originStops, destinationStops));
+      journeys.push(...this.findOneTransferJourneys(origin, destination, originStops, destinationStops, now));
     }
 
     const ranked = journeys
@@ -149,7 +161,20 @@ class JourneyPlanner {
 
   private buildIndexes(): void {
     const graphCore = graphCoreData as TransitGraphCore;
+    const schedules = schedulesData as TransitGraphSchedules;
     const stopById = new Map<string, JourneyStop>();
+
+    schedules.frequencies.forEach((frequency) => {
+      const entries = this.frequenciesByPattern.get(frequency.patternId) ?? [];
+      entries.push(frequency);
+      this.frequenciesByPattern.set(frequency.patternId, entries);
+    });
+
+    schedules.departures.forEach((schedule) => {
+      const entries = this.departuresByPattern.get(schedule.patternId) ?? [];
+      entries.push(schedule);
+      this.departuresByPattern.set(schedule.patternId, entries);
+    });
 
     graphCore.stops.forEach((stop) => {
       const journeyStop: JourneyStop = {
@@ -176,6 +201,7 @@ class JourneyPlanner {
           line: pattern.line,
           stops,
           segmentMeters: pattern.segmentMeters,
+          scheduleIds: pattern.scheduleIds,
           defaultWaitMin: pattern.defaultWaitMin ?? this.defaultWaitForMode(pattern.mode),
         });
       }
@@ -255,7 +281,8 @@ class JourneyPlanner {
     origin: Coordinates,
     destination: Coordinates,
     originStops: NearbyStop[],
-    destinationStops: NearbyStop[]
+    destinationStops: NearbyStop[],
+    now: Date
   ): Journey[] {
     const journeys: Journey[] = [];
     const destinationByStopId = new Map(destinationStops.map((entry) => [entry.stop.id, entry]));
@@ -267,7 +294,7 @@ class JourneyPlanner {
         for (let toIndex = fromIndex + 1; toIndex < pattern.stops.length; toIndex += 1) {
           const destinationStop = destinationByStopId.get(pattern.stops[toIndex].id);
           if (!destinationStop) continue;
-          const transitLeg = this.createTransitLeg(pattern, fromIndex, toIndex);
+          const transitLeg = this.createTransitLeg(pattern, fromIndex, toIndex, now);
           const walkToStart = this.createWalkLeg('Konumun', originStop.stop.name, originStop.distance, [
             origin,
             originStop.stop.coordinates,
@@ -289,7 +316,8 @@ class JourneyPlanner {
     origin: Coordinates,
     destination: Coordinates,
     originStops: NearbyStop[],
-    destinationStops: NearbyStop[]
+    destinationStops: NearbyStop[],
+    now: Date
   ): Journey[] {
     const journeys: Journey[] = [];
     const destinationByStopId = new Map(destinationStops.map((entry) => [entry.stop.id, entry]));
@@ -312,14 +340,14 @@ class JourneyPlanner {
               for (let toIndex = transferToIndex + 1; toIndex < secondPattern.stops.length; toIndex += 1) {
                 const destinationStop = destinationByStopId.get(secondPattern.stops[toIndex].id);
                 if (!destinationStop) continue;
-                const firstLeg = this.createTransitLeg(firstPattern, fromIndex, transferFromIndex);
+                const firstLeg = this.createTransitLeg(firstPattern, fromIndex, transferFromIndex, now);
                 const transferWalk = this.createWalkLeg(
                   transferFrom.name,
                   transferTo.stop.name,
                   transferTo.distance,
                   [transferFrom.coordinates, transferTo.stop.coordinates]
                 );
-                const secondLeg = this.createTransitLeg(secondPattern, transferToIndex, toIndex);
+                const secondLeg = this.createTransitLeg(secondPattern, transferToIndex, toIndex, now);
                 const walkToStart = this.createWalkLeg('Konumun', originStop.stop.name, originStop.distance, [
                   origin,
                   originStop.stop.coordinates,
@@ -349,7 +377,7 @@ class JourneyPlanner {
     return this.nearbyStopsWithin(stop.coordinates, 250, 3);
   }
 
-  private createTransitLeg(pattern: LinePattern, fromIndex: number, toIndex: number): TransitLeg {
+  private createTransitLeg(pattern: LinePattern, fromIndex: number, toIndex: number, now: Date): TransitLeg {
     const coordinates = this.getTransitLegCoordinates(pattern, fromIndex, toIndex);
     const distanceMeters =
       distanceAlongSegments(pattern.segmentMeters, fromIndex, toIndex) ??
@@ -358,7 +386,7 @@ class JourneyPlanner {
         : distanceAlongStops(pattern.stops, fromIndex, toIndex));
     const averageSpeed = pattern.mode === 'tram' ? 24 : config.app.defaultBusSpeedKmh;
     const approxMin = roundMinutes(((distanceMeters * 1.25) / 1000 / averageSpeed) * 60);
-    const waitMin = pattern.defaultWaitMin;
+    const waitMin = this.waitMinutesForPattern(pattern, now);
 
     return {
       type: 'transit',
@@ -371,6 +399,52 @@ class JourneyPlanner {
       waitMin,
       coordinates,
     };
+  }
+
+  private waitMinutesForPattern(pattern: LinePattern, now: Date): number {
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const serviceId = this.serviceIdForDate(now);
+    const departureWait = this.waitMinutesFromDepartures(pattern.id, serviceId, nowMin);
+    if (departureWait !== null) return departureWait;
+
+    const frequencyWait = this.waitMinutesFromFrequencies(pattern.id, serviceId, nowMin);
+    if (frequencyWait !== null) return frequencyWait;
+
+    return pattern.defaultWaitMin;
+  }
+
+  private serviceIdForDate(date: Date): TransitServiceId {
+    const day = date.getDay();
+    if (day === 0) return 'sunday';
+    if (day === 6) return 'saturday';
+    return 'weekday';
+  }
+
+  private waitMinutesFromDepartures(patternId: string, serviceId: TransitServiceId, nowMin: number): number | null {
+    const schedules = this.departuresByPattern.get(patternId) ?? [];
+    const schedule = schedules.find((entry) => entry.serviceId === serviceId) ?? schedules.find((entry) => entry.serviceId === 'weekday');
+    if (!schedule || schedule.departureMins.length === 0) return null;
+
+    const nextToday = schedule.departureMins.find((minute) => minute >= nowMin);
+    const nextDeparture = nextToday ?? schedule.departureMins[0] + MINUTES_PER_DAY;
+    return Math.max(0, Math.round(nextDeparture - nowMin));
+  }
+
+  private waitMinutesFromFrequencies(patternId: string, serviceId: TransitServiceId, nowMin: number): number | null {
+    const frequencies = this.frequenciesByPattern.get(patternId) ?? [];
+    const candidates = frequencies
+      .filter((entry) => entry.serviceId === serviceId || (serviceId === 'saturday' && entry.serviceId === 'weekday'))
+      .sort((a, b) => a.startMin - b.startMin);
+
+    if (candidates.length === 0) return null;
+
+    const active = candidates.find((entry) => nowMin >= entry.startMin && nowMin <= entry.endMin);
+    if (active) return Math.max(1, Math.round(active.headwayMin / 2));
+
+    const upcoming = candidates.find((entry) => nowMin < entry.startMin);
+    if (upcoming) return Math.max(0, Math.round(upcoming.startMin - nowMin));
+
+    return Math.max(0, Math.round(candidates[0].startMin + MINUTES_PER_DAY - nowMin));
   }
 
   private getTransitLegCoordinates(pattern: LinePattern, fromIndex: number, toIndex: number): Coordinates[] {

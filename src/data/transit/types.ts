@@ -79,7 +79,16 @@ export interface TransitFrequency {
   headwayMin: number;
 }
 
+export interface TransitDepartureSchedule {
+  id: string;
+  patternId: string;
+  serviceId: TransitServiceId;
+  sourceRouteId?: number | string;
+  departureMins: number[];
+}
+
 export interface TransitGraphSchedules {
   metadata: Pick<TransitGraphMetadata, 'version' | 'generatedAt'>;
   frequencies: TransitFrequency[];
+  departures: TransitDepartureSchedule[];
 }
