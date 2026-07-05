@@ -148,6 +148,10 @@ function main() {
     tramPatterns.some((pattern) => pattern.stopOffsetsMin?.some((offset) => typeof offset === 'number' && offset > 0)),
     'Expected measured stop offsets on tram patterns'
   );
+  assert(
+    tramPatterns.every((pattern) => !pattern.scheduleIds?.length || pattern.stopOffsetsMin?.length),
+    'Every scheduled tram pattern must have stop offsets (measured or fixed-interval)'
+  );
 
   const samplePattern = core.patterns.find((pattern) => pattern.stopIds.length >= 4);
   assert(samplePattern, 'Expected at least one pattern with 4+ stops for route smoke check');

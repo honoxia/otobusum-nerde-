@@ -248,6 +248,164 @@ function matchingTramScheduleRoute(line) {
   });
 }
 
+// Mirrors TramService fixed-interval rule: order stops by rail distance from the
+// departure terminal, then apply FIXED_INTERVAL_MIN_PER_STOP per stop.
+const FIXED_INTERVAL_MIN_PER_STOP = 2;
+const ROUTE_ON_PATH_TOLERANCE_METERS = 450;
+
+function stopMatchesTerminal(stopName, terminal) {
+  const normalizedStop = normalizeRouteText(stopName);
+  const normalizedTerminal = normalizeRouteText(terminal);
+
+  if (normalizedTerminal === 'OGU') return normalizedStop.includes('OSMANGAZI');
+  if (normalizedTerminal === 'ES-ES') return normalizedStop.includes('ES-ES');
+  if (normalizedTerminal === 'SEHIR HASTANESI') return normalizedStop.includes('SEHIR HASTANESI');
+  if (normalizedTerminal === '75.YIL') return normalizedStop.includes('75.YIL');
+  if (normalizedTerminal === 'KUMLUBEL') {
+    return normalizedStop.includes('KUMLUBEL') || normalizedStop.includes('TRAMVAY DURAGI');
+  }
+
+  return normalizedStop.includes(normalizedTerminal);
+}
+
+function buildRailGraph(lineRef) {
+  const lines = tramData.lines.filter((line) => line.ref === lineRef);
+  if (lines.length === 0) return null;
+
+  const nodeIndexByKey = new Map();
+  const nodes = [];
+  const adjacency = [];
+
+  const getNodeIndex = (coordinates) => {
+    const key = `${coordinates.latitude.toFixed(5)},${coordinates.longitude.toFixed(5)}`;
+    const existing = nodeIndexByKey.get(key);
+    if (existing != null) return existing;
+
+    const index = nodes.length;
+    nodeIndexByKey.set(key, index);
+    nodes.push(coordinates);
+    adjacency.push([]);
+    return index;
+  };
+
+  lines.forEach((line) => {
+    line.paths.forEach((linePath) => {
+      for (let index = 1; index < linePath.length; index += 1) {
+        const from = getNodeIndex(linePath[index - 1]);
+        const to = getNodeIndex(linePath[index]);
+        if (from === to) continue;
+        const meters = distanceMeters(linePath[index - 1], linePath[index]);
+        adjacency[from].push({ to, meters });
+        adjacency[to].push({ to: from, meters });
+      }
+    });
+  });
+
+  const lineStops = tramData.stops.filter((stop) => stop.lines.includes(lineRef));
+  const stopNodeById = new Map();
+  lineStops.forEach((stop) => {
+    let nearestIndex = 0;
+    let nearestDistance = Infinity;
+    nodes.forEach((node, index) => {
+      const distance = distanceMeters(stop.coordinates, node);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    stopNodeById.set(stop.id, nearestIndex);
+  });
+
+  return { nodes, adjacency, lineStops, stopNodeById };
+}
+
+function dijkstra(graph, startNode) {
+  const distances = Array(graph.nodes.length).fill(Infinity);
+  const visited = new Set();
+  distances[startNode] = 0;
+
+  while (visited.size < graph.nodes.length) {
+    let current = -1;
+    let currentDistance = Infinity;
+    for (let index = 0; index < distances.length; index += 1) {
+      if (!visited.has(index) && distances[index] < currentDistance) {
+        current = index;
+        currentDistance = distances[index];
+      }
+    }
+    if (current < 0) break;
+    visited.add(current);
+
+    graph.adjacency[current].forEach((edge) => {
+      const nextDistance = currentDistance + edge.meters;
+      if (nextDistance < distances[edge.to]) {
+        distances[edge.to] = nextDistance;
+      }
+    });
+  }
+
+  return distances;
+}
+
+function resolveTerminalNode(graph, terminal, oppositeTerminal) {
+  const terminalStop = graph.lineStops.find((stop) => stopMatchesTerminal(stop.name, terminal));
+  if (terminalStop) return graph.stopNodeById.get(terminalStop.id) ?? null;
+
+  const oppositeStop = graph.lineStops.find((stop) => stopMatchesTerminal(stop.name, oppositeTerminal));
+  const oppositeNode = oppositeStop ? graph.stopNodeById.get(oppositeStop.id) : null;
+  if (oppositeNode == null) return null;
+
+  // Some OSM layers miss terminal stop nodes; use the farthest rail node instead.
+  const distances = dijkstra(graph, oppositeNode);
+  let farthestNode = null;
+  let farthestDistance = -1;
+  distances.forEach((distance, index) => {
+    if (Number.isFinite(distance) && distance > farthestDistance) {
+      farthestDistance = distance;
+      farthestNode = index;
+    }
+  });
+  return farthestNode;
+}
+
+function fixedIntervalStopOffsets(config, patternStops) {
+  const graph = buildRailGraph(config.lineRef);
+  if (!graph) return undefined;
+
+  const startNode = resolveTerminalNode(graph, config.from, config.to);
+  const endNode = resolveTerminalNode(graph, config.to, config.from);
+  if (startNode == null || endNode == null || startNode === endNode) return undefined;
+
+  const startDistances = dijkstra(graph, startNode);
+  const endDistances = dijkstra(graph, endNode);
+  const routeMeters = startDistances[endNode];
+  if (!Number.isFinite(routeMeters)) return undefined;
+
+  const orderedStops = graph.lineStops
+    .map((stop) => {
+      const node = graph.stopNodeById.get(stop.id);
+      if (node == null) return null;
+      const fromStart = startDistances[node];
+      const toEnd = endDistances[node];
+      if (!Number.isFinite(fromStart) || !Number.isFinite(toEnd)) return null;
+      if (fromStart + toEnd > routeMeters + ROUTE_ON_PATH_TOLERANCE_METERS) return null;
+      return { normalizedName: normalizeRouteText(stop.name), fromStart };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.fromStart - b.fromStart);
+
+  const offsetsByName = new Map();
+  orderedStops.forEach((stop) => {
+    if (!offsetsByName.has(stop.normalizedName)) {
+      offsetsByName.set(stop.normalizedName, offsetsByName.size * FIXED_INTERVAL_MIN_PER_STOP);
+    }
+  });
+  if (offsetsByName.size === 0) return undefined;
+
+  const offsets = patternStops.map((stop) => offsetsByName.get(normalizeRouteText(stop.name)) ?? null);
+  return offsets.some((value) => value !== null) ? offsets : undefined;
+}
+
 function tramStopOffsets(sourceRouteId, patternStops) {
   const measured = tramStopOffsetsData[sourceRouteId];
   if (!measured) return undefined;
@@ -360,8 +518,10 @@ function buildGraph() {
     const scheduleIds = [];
     let stopOffsetsMin;
     if (matchingScheduleRoute) {
-      const [sourceRouteId] = matchingScheduleRoute;
-      stopOffsetsMin = tramStopOffsets(sourceRouteId, patternStops);
+      const [sourceRouteId, scheduleRouteConfig] = matchingScheduleRoute;
+      stopOffsetsMin =
+        tramStopOffsets(sourceRouteId, patternStops) ??
+        fixedIntervalStopOffsets(scheduleRouteConfig, patternStops);
       [
         ['weekday', 'weekday'],
         ['saturday', 'weekday'],
