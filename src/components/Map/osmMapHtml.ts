@@ -372,7 +372,7 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
       }
 
       async function roadSnapBusLatLngs(coords) {
-        if (!coords || coords.length < 2) return toLatLngs(coords || []);
+        if (!coords || coords.length < 2) return null;
         try {
           var coordStr = coords
             .map(function (p) { return p.longitude + ',' + p.latitude; })
@@ -380,31 +380,38 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
           var url = 'https://router.project-osrm.org/route/v1/driving/' +
             coordStr +
             '?overview=full&geometries=geojson&continue_straight=false';
-          var response = await fetch(url);
-          if (!response.ok) return toLatLngs(coords);
+          var controller = new AbortController();
+          var timer = setTimeout(function () { controller.abort(); }, 3000);
+          var response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timer);
+          if (!response.ok) return null;
           var data = await response.json();
           var geometry = data && data.routes && data.routes[0] && data.routes[0].geometry;
-          if (!geometry || !geometry.coordinates || geometry.coordinates.length < 2) return toLatLngs(coords);
+          if (!geometry || !geometry.coordinates || geometry.coordinates.length < 2) return null;
           return geometry.coordinates.map(function (p) { return [p[1], p[0]]; });
         } catch (e) {
-          return toLatLngs(coords);
+          return null;
         }
       }
 
-      async function renderJourney(journey) {
+      var journeyRenderToken = 0;
+
+      function renderJourney(journey) {
         journeyLayer.clearLayers();
+        var token = ++journeyRenderToken;
         if (!journey || !journey.legs) return;
 
+        // Draw everything immediately with raw coordinates; road snapping
+        // refines bus legs afterwards so a slow OSRM never blocks the map.
         var bounds = [];
+        var busLegs = [];
+
         for (var i = 0; i < journey.legs.length; i++) {
           var leg = journey.legs[i];
           var coords = leg.coordinates || [];
           if (coords.length < 2) continue;
 
-          var latLngs = leg.type === 'transit' && leg.mode === 'bus'
-            ? await roadSnapBusLatLngs(coords)
-            : toLatLngs(coords);
-
+          var latLngs = toLatLngs(coords);
           for (var c = 0; c < latLngs.length; c++) {
             bounds.push(latLngs[c]);
           }
@@ -414,7 +421,7 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
             color = leg.mode === 'tram' ? '#4F46E5' : leg.mode === 'dolmus' ? '#F97316' : '#22C55E';
           }
 
-          L.polyline(latLngs, {
+          var polyline = L.polyline(latLngs, {
             color: color,
             weight: leg.type === 'walk' ? 3 : 5,
             opacity: 0.9,
@@ -422,6 +429,10 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
             lineCap: 'round',
             lineJoin: 'round'
           }).addTo(journeyLayer);
+
+          if (leg.type === 'transit' && leg.mode === 'bus') {
+            busLegs.push({ coords: coords, polyline: polyline });
+          }
 
           if (leg.type === 'transit') {
             var icon = L.divIcon({
@@ -438,6 +449,13 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
             map.fitBounds(L.latLngBounds(bounds), { padding: [35, 35] });
           } catch (e) {}
         }
+
+        busLegs.forEach(function (item) {
+          roadSnapBusLatLngs(item.coords).then(function (snapped) {
+            if (token !== journeyRenderToken) return;
+            if (snapped && snapped.length >= 2) item.polyline.setLatLngs(snapped);
+          }).catch(function () {});
+        });
       }
 
       window.updateJourneyData = function (jsonString) {
