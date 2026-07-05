@@ -6,6 +6,7 @@ const routesData = require('../src/data/routes-data.json');
 const tramData = require('../src/data/tram-data.json');
 const tramScheduleData = require('../src/data/tram-schedule.json');
 const dolmusData = require('../src/data/dolmus-data.json');
+const tramStopOffsetsData = require('../src/data/tram-stop-offsets.json');
 
 const OUT_DIR = path.join(__dirname, '..', 'src', 'data', 'transit');
 const VERSION = '1.1-phase-a';
@@ -247,6 +248,26 @@ function matchingTramScheduleRoute(line) {
   });
 }
 
+function tramStopOffsets(sourceRouteId, patternStops) {
+  const measured = tramStopOffsetsData[sourceRouteId];
+  if (!measured) return undefined;
+
+  const offsetsByName = new Map(
+    Object.entries(measured).map(([stopName, minutes]) => [normalizeRouteText(stopName), minutes])
+  );
+
+  const offsets = patternStops.map((stop) => {
+    const normalized = normalizeRouteText(stop.name);
+    if (offsetsByName.has(normalized)) return offsetsByName.get(normalized);
+    for (const [name, minutes] of offsetsByName) {
+      if (normalized.includes(name) || name.includes(normalized)) return minutes;
+    }
+    return null;
+  });
+
+  return offsets.some((value) => value !== null) ? offsets : undefined;
+}
+
 function buildGraph() {
   const stops = [];
   const routes = [];
@@ -337,8 +358,10 @@ function buildGraph() {
     if (patternStops.length < 2) return;
     const matchingScheduleRoute = matchingTramScheduleRoute(line);
     const scheduleIds = [];
+    let stopOffsetsMin;
     if (matchingScheduleRoute) {
       const [sourceRouteId] = matchingScheduleRoute;
+      stopOffsetsMin = tramStopOffsets(sourceRouteId, patternStops);
       [
         ['weekday', 'weekday'],
         ['saturday', 'weekday'],
@@ -370,6 +393,7 @@ function buildGraph() {
       sourceRouteIds: [line.osmId],
       stopIds: patternStops.map((stop) => stop.id),
       segmentMeters: segmentMeters(patternStops, shapeCoordinates),
+      stopOffsetsMin,
       shapeId,
       scheduleIds,
       defaultWaitMin: DEFAULT_WAIT_MIN.tram,

@@ -84,6 +84,16 @@ function main() {
     if (pattern.shapeId) {
       assert(shapeIds.has(pattern.shapeId), `Pattern ${pattern.id} references missing shape ${pattern.shapeId}`);
     }
+    if (pattern.stopOffsetsMin) {
+      assert(
+        pattern.stopOffsetsMin.length === pattern.stopIds.length,
+        `Pattern ${pattern.id} stopOffsetsMin does not match stop count`
+      );
+      assert(
+        pattern.stopOffsetsMin.every((offset) => offset === null || (Number.isFinite(offset) && offset >= 0)),
+        `Pattern ${pattern.id} has invalid stop offset values`
+      );
+    }
     if (pattern.mode === 'bus') {
       assert(pattern.sourceRouteIds.length > 0, `Bus pattern ${pattern.id} must keep sourceRouteIds metadata`);
       assert(
@@ -134,6 +144,10 @@ function main() {
   assert(dolmusPatterns.every((pattern) => pattern.scheduleIds?.length), 'Every dolmus pattern must reference schedules');
   const tramPatterns = core.patterns.filter((pattern) => pattern.mode === 'tram');
   assert(tramPatterns.some((pattern) => pattern.scheduleIds?.length), 'Expected tram patterns to reference schedules');
+  assert(
+    tramPatterns.some((pattern) => pattern.stopOffsetsMin?.some((offset) => typeof offset === 'number' && offset > 0)),
+    'Expected measured stop offsets on tram patterns'
+  );
 
   const samplePattern = core.patterns.find((pattern) => pattern.stopIds.length >= 4);
   assert(samplePattern, 'Expected at least one pattern with 4+ stops for route smoke check');

@@ -39,6 +39,8 @@ export interface TransitGraphPattern {
   sourceRouteIds: Array<number | string>;
   stopIds: string[];
   segmentMeters?: number[];
+  /** Measured minutes from first departure stop, aligned with stopIds; null where unmeasured. */
+  stopOffsetsMin?: Array<number | null>;
   shapeId?: string;
   scheduleIds?: string[];
   defaultWaitMin?: number;

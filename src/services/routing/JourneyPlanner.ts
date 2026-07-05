@@ -62,6 +62,7 @@ interface LinePattern {
   line: string;
   stops: JourneyStop[];
   segmentMeters?: number[];
+  stopOffsetsMin?: Array<number | null>;
   scheduleIds?: string[];
   defaultWaitMin: number;
 }
@@ -194,6 +195,14 @@ class JourneyPlanner {
         .map((stopId) => stopById.get(stopId))
         .filter((stop): stop is JourneyStop => !!stop);
 
+      // Keep offsets aligned with the filtered stop list, not the raw stopIds.
+      const stopOffsetsMin = pattern.stopOffsetsMin
+        ? pattern.stopIds
+            .map((stopId, index) => ({ stopId, offset: pattern.stopOffsetsMin?.[index] ?? null }))
+            .filter((entry) => stopById.has(entry.stopId))
+            .map((entry) => entry.offset)
+        : undefined;
+
       if (stops.length >= 2) {
         this.patterns.push({
           id: pattern.id,
@@ -201,6 +210,7 @@ class JourneyPlanner {
           line: pattern.line,
           stops,
           segmentMeters: pattern.segmentMeters,
+          stopOffsetsMin,
           scheduleIds: pattern.scheduleIds,
           defaultWaitMin: pattern.defaultWaitMin ?? this.defaultWaitForMode(pattern.mode),
         });
@@ -386,7 +396,7 @@ class JourneyPlanner {
         : distanceAlongStops(pattern.stops, fromIndex, toIndex));
     const averageSpeed = pattern.mode === 'tram' ? 24 : config.app.defaultBusSpeedKmh;
     const approxMin = roundMinutes(((distanceMeters * 1.25) / 1000 / averageSpeed) * 60);
-    const waitMin = this.waitMinutesForPattern(pattern, now);
+    const waitMin = this.waitMinutesForPattern(pattern, fromIndex, now);
 
     return {
       type: 'transit',
@@ -401,10 +411,12 @@ class JourneyPlanner {
     };
   }
 
-  private waitMinutesForPattern(pattern: LinePattern, now: Date): number {
+  private waitMinutesForPattern(pattern: LinePattern, fromIndex: number, now: Date): number {
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const serviceId = this.serviceIdForDate(now);
-    const departureWait = this.waitMinutesFromDepartures(pattern.id, serviceId, nowMin);
+    // Terminal departure times are shifted by the measured travel time to the boarding stop.
+    const boardingOffsetMin = pattern.stopOffsetsMin?.[fromIndex] ?? 0;
+    const departureWait = this.waitMinutesFromDepartures(pattern.id, serviceId, nowMin, boardingOffsetMin);
     if (departureWait !== null) return departureWait;
 
     const frequencyWait = this.waitMinutesFromFrequencies(pattern.id, serviceId, nowMin);
@@ -420,14 +432,20 @@ class JourneyPlanner {
     return 'weekday';
   }
 
-  private waitMinutesFromDepartures(patternId: string, serviceId: TransitServiceId, nowMin: number): number | null {
+  private waitMinutesFromDepartures(
+    patternId: string,
+    serviceId: TransitServiceId,
+    nowMin: number,
+    boardingOffsetMin = 0
+  ): number | null {
     const schedules = this.departuresByPattern.get(patternId) ?? [];
     const schedule = schedules.find((entry) => entry.serviceId === serviceId) ?? schedules.find((entry) => entry.serviceId === 'weekday');
     if (!schedule || schedule.departureMins.length === 0) return null;
 
-    const nextToday = schedule.departureMins.find((minute) => minute >= nowMin);
-    const nextDeparture = nextToday ?? schedule.departureMins[0] + MINUTES_PER_DAY;
-    return Math.max(0, Math.round(nextDeparture - nowMin));
+    const arrivalsAtStop = schedule.departureMins.map((minute) => minute + boardingOffsetMin);
+    const nextToday = arrivalsAtStop.find((minute) => minute >= nowMin);
+    const nextArrival = nextToday ?? arrivalsAtStop[0] + MINUTES_PER_DAY;
+    return Math.max(0, Math.round(nextArrival - nowMin));
   }
 
   private waitMinutesFromFrequencies(patternId: string, serviceId: TransitServiceId, nowMin: number): number | null {
