@@ -60,7 +60,7 @@ export interface LiveTramStopArrivals {
 }
 
 const FEED_CACHE_TTL_MS = 5 * 60 * 1000;
-const STOP_MATCH_MAX_DISTANCE_METERS = 140;
+const STOP_MATCH_MAX_DISTANCE_METERS = 300;
 const STALE_LIVE_ARRIVAL_SECONDS = 2 * 60;
 
 function nimbusStopCoordinates(stop: NimbusStop): Coordinates | null {
@@ -119,14 +119,20 @@ class TramNimbusService {
   async getLiveArrivalsForStop(stop: TramStop, limit = 6): Promise<LiveTramStopArrivals | null> {
     try {
       const feed = await this.fetchFeed();
-      if (!feed) return null;
+      if (!feed) {
+        console.warn('[TramNimbus] feed unavailable');
+        return null;
+      }
 
       const matchedStop = this.findNearestNimbusStop(feed, stop);
-      if (!matchedStop) return null;
+      if (!matchedStop) {
+        console.warn(`[TramNimbus] no stop match for "${stop.name}"`);
+        return null;
+      }
 
       const response = await fetch(`${this.baseUrl}/${this.locatorHash}/online/stop/${matchedStop.stop.id}`);
       if (!response.ok) {
-        devLog(`[TramNimbus] online/stop failed: ${response.status}`);
+        console.warn(`[TramNimbus] online/stop failed: ${response.status}`);
         return null;
       }
 
@@ -168,6 +174,9 @@ class TramNimbusService {
       }
 
       arrivals.sort((a, b) => a.etaSeconds - b.etaSeconds);
+      console.warn(
+        `[TramNimbus] ${stop.name} -> ${matchedStop.stop.n} (${Math.round(matchedStop.distance)}m), arrivals=${arrivals.length}`
+      );
 
       return {
         nimbusStopId: matchedStop.stop.id,
@@ -176,7 +185,7 @@ class TramNimbusService {
         arrivals: arrivals.slice(0, limit),
       };
     } catch (error) {
-      devLog('[TramNimbus] live arrivals failed', error);
+      console.warn('[TramNimbus] live arrivals failed', error);
       return null;
     }
   }
@@ -199,7 +208,7 @@ class TramNimbusService {
     try {
       const response = await fetch(`${this.baseUrl}/${this.locatorHash}/data`);
       if (!response.ok) {
-        devLog(`[TramNimbus] data failed: ${response.status}`);
+        console.warn(`[TramNimbus] data failed: ${response.status}`);
         return null;
       }
 
@@ -207,7 +216,7 @@ class TramNimbusService {
       this.feedCache = { data, fetchedAt: Date.now() };
       return data;
     } catch (error) {
-      devLog('[TramNimbus] data fetch failed', error);
+      console.warn('[TramNimbus] data fetch failed', error);
       return null;
     }
   }

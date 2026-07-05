@@ -10,7 +10,7 @@ interface AppTopBarProps {
 }
 
 /**
- * Stitch tasarımındaki paylaşılan üst app bar: sol ikon · ESULAŞ · erişilebilirlik.
+ * Paylaşılan üst app bar: sol ikon · uygulama markası · erişilebilirlik.
  */
 export const AppTopBar: React.FC<AppTopBarProps> = ({ onBack, leftIcon }) => {
   const { colors } = useTheme();
@@ -21,7 +21,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({ onBack, leftIcon }) => {
       <TouchableOpacity style={styles.iconBtn} onPress={onBack} disabled={!onBack} activeOpacity={0.7}>
         <MaterialIcons name={icon} size={24} color={colors.textSecondary} />
       </TouchableOpacity>
-      <Text style={[styles.brand, { color: colors.primaryLight }]}>ESULAŞ</Text>
+      <Text style={[styles.brand, { color: colors.primaryLight }]}>Ulaşım Rehberi</Text>
       <View style={styles.iconBtn}>
         <MaterialIcons name="accessibility-new" size={24} color={colors.primaryLight} />
       </View>

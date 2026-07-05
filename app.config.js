@@ -1,10 +1,12 @@
 import 'dotenv/config';
 
+const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
 export default {
   expo: {
-    name: "otobusum nerde",
+    name: "Eskişehir Ulaşım Rehberi",
     slug: "otobusum-nerde",
-    version: "1.0.0",
+    version: "1.0.1",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "automatic",
@@ -14,6 +16,15 @@ export default {
       resizeMode: "contain",
       backgroundColor: "#ffffff"
     },
+    plugins: [
+      "expo-font",
+      [
+        "expo-location",
+        {
+          locationWhenInUsePermission: "Konumunuz en yakın durağı bulmak için kullanılır."
+        }
+      ]
+    ],
     ios: {
       supportsTablet: true,
       infoPlist: {
@@ -28,18 +39,29 @@ export default {
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
+      allowBackup: false,
       package: "com.honoxia.otobusumnerde",
       usesCleartextTraffic: false,
       permissions: [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "INTERNET",
         "RECORD_AUDIO"
       ],
-      config: {
-        googleMaps: {
-          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
-        }
-      }
+      blockedPermissions: [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      ...(googleMapsApiKey
+        ? {
+            config: {
+              googleMaps: {
+                apiKey: googleMapsApiKey
+              }
+            }
+          }
+        : {})
     },
     web: {
       favicon: "./assets/favicon.png"
@@ -51,6 +73,9 @@ export default {
       FLESPI_CHANNEL_ID: process.env.FLESPI_CHANNEL_ID || "",
       FLESPI_DEVICE_IDS: process.env.FLESPI_DEVICE_IDS || "",
       NIMBUS_LOCATOR_HASH: process.env.NIMBUS_LOCATOR_HASH || "",
+      TRAM_NIMBUS_LOCATOR_HASH: process.env.EXPO_PUBLIC_TRAM_NIMBUS_LOCATOR_HASH || "",
+      EXPO_PUBLIC_MAP_PROVIDER: process.env.EXPO_PUBLIC_MAP_PROVIDER || "osm",
+      EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: googleMapsApiKey,
       MQTT_BROKER: "wss://mqtt.flespi.io",
       MQTT_PORT: "443",
       MAX_NEARBY_STOP_DISTANCE: "1000",

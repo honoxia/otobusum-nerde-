@@ -104,24 +104,30 @@ export const OsmMapView: React.FC<OsmMapViewProps> = ({
   }, [onError]);
 
   const handleShouldStartLoad = useCallback((request: { url: string }) => {
-    return request.url === 'about:blank' || request.url.startsWith('about:');
+    const url = request.url;
+    return (
+      url === 'about:blank' ||
+      url.startsWith('about:') ||
+      url.startsWith('https://') ||
+      url.startsWith('data:')
+    );
   }, []);
 
   return (
     <WebView
       ref={webViewRef}
       style={styles.webview}
-      originWhitelist={['about:blank']}
-      source={{ html }}
+      originWhitelist={['*']}
+      source={{ html, baseUrl: 'https://localhost' }}
       javaScriptEnabled
-      domStorageEnabled={false}
+      domStorageEnabled
       allowFileAccess={false}
-      mixedContentMode="never"
+      mixedContentMode="always"
+      setSupportMultipleWindows={false}
       onShouldStartLoadWithRequest={handleShouldStartLoad}
       onMessage={handleMessage}
       onError={handleError}
       onHttpError={handleError}
-      androidLayerType="hardware"
     />
   );
 };

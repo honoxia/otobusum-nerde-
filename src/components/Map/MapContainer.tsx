@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Coordinates, BusStop, BusPosition } from '../../types/shared-types';
 import { config } from '../../config';
-import { GoogleMapView } from './GoogleMapView';
 import { OsmMapView } from './OsmMapView';
 import { devLog } from '../../utils/devLog';
+
+const GoogleMapView = lazy(() =>
+  import('./GoogleMapView').then((module) => ({ default: module.GoogleMapView }))
+);
 
 interface MapContainerProps {
   userLocation: Coordinates | null;
@@ -42,14 +45,22 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   // 1) Google Maps
   if (useGoogle) {
     return (
-      <GoogleMapView
-        userLocation={userLocation}
-        stops={stops}
-        nearestStopId={nearestStopId}
-        buses={buses}
-        onStopPress={onStopPress}
-        onBusPress={onBusPress}
-      />
+      <Suspense
+        fallback={
+          <View style={styles.mapLoading}>
+            <ActivityIndicator size="large" />
+          </View>
+        }
+      >
+        <GoogleMapView
+          userLocation={userLocation}
+          stops={stops}
+          nearestStopId={nearestStopId}
+          buses={buses}
+          onStopPress={onStopPress}
+          onBusPress={onBusPress}
+        />
+      </Suspense>
     );
   }
 
@@ -133,6 +144,12 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 };
 
 const styles = StyleSheet.create({
+  mapLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+  },
   fallbackContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',

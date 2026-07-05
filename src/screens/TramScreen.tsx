@@ -189,14 +189,14 @@ export const TramScreen: React.FC<TramScreenProps> = ({ onBack }) => {
         <WebView
           ref={webViewRef}
           style={styles.webview}
-          originWhitelist={['about:blank']}
-          source={{ html }}
+          originWhitelist={['*']}
+          source={{ html, baseUrl: 'https://localhost' }}
           javaScriptEnabled
-          domStorageEnabled={false}
+          domStorageEnabled
           allowFileAccess={false}
-          mixedContentMode="never"
+          mixedContentMode="always"
+          setSupportMultipleWindows={false}
           onMessage={handleMessage}
-          androidLayerType="hardware"
         />
       </View>
 
