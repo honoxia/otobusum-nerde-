@@ -66,6 +66,7 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
   const [query, setQuery] = useState('');
   const [destination, setDestination] = useState<Destination | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [panelMode, setPanelMode] = useState<'list' | 'compact' | 'directions'>('list');
   const { location, error: locationError, isLoading: locationLoading } = useLocation();
 
   const html = useMemo(() => buildOsmHtml({ tileUrl: config.map.tileUrl }), []);
@@ -99,6 +100,7 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
     setDestination({ name: stop.name, coordinates: stop.coordinates });
     setQuery(stop.name);
     setSelectedIndex(0);
+    setPanelMode('list');
   };
 
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
@@ -110,6 +112,7 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
         setDestination({ name: 'Haritadan seçilen nokta', coordinates: msg.coordinates });
         setQuery('Haritadan seçilen nokta');
         setSelectedIndex(0);
+        setPanelMode('list');
       }
     } catch {}
   }, []);
@@ -198,7 +201,7 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
         )}
 
         {/* Sonuç paneli (harita üstünde, alt) */}
-        {destination && (
+        {destination && panelMode === 'list' && (
           <View style={[styles.resultPanel, { backgroundColor: colors.background, borderTopColor: colors.divider }]}>
             <Text style={[styles.h2, { color: colors.textPrimary }]}>Önerilen Güzergahlar</Text>
             {locationLoading ? (
@@ -214,11 +217,56 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
                     key={`${journey.score}-${index}`}
                     journey={journey}
                     selected={index === selectedIndex}
-                    onPress={() => setSelectedIndex(index)}
+                    onPress={() => { setSelectedIndex(index); setPanelMode('compact'); }}
                   />
                 ))}
               </ScrollView>
             )}
+          </View>
+        )}
+
+        {/* Seçilen rota: kompakt özet (harita öne çıkar) */}
+        {destination && panelMode === 'compact' && selectedJourney && (
+          <View style={[styles.compactBar, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
+            <TouchableOpacity style={styles.compactSummary} onPress={() => setPanelMode('list')} activeOpacity={0.8}>
+              <View style={styles.minRow}>
+                <Text style={[styles.minBig, { color: colors.primaryLight }]}>{selectedJourney.totalApproxMin}</Text>
+                <Text style={[styles.minUnit, { color: colors.textSecondary }]}>dk</Text>
+              </View>
+              <View style={styles.compactTimeline}>
+                {selectedJourney.legs.map((leg, i) => (
+                  <React.Fragment key={`${leg.type}-${i}`}>
+                    {i > 0 && <MaterialIcons name="chevron-right" size={14} color={colors.textTertiary} />}
+                    <LegChip leg={leg} />
+                  </React.Fragment>
+                ))}
+              </View>
+              <MaterialIcons name="expand-less" size={22} color={colors.textTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.directionsBtn, { backgroundColor: colors.primary }]}
+              onPress={() => setPanelMode('directions')}
+              activeOpacity={0.85}
+            >
+              <MaterialIcons name="format-list-numbered" size={18} color="#FFFFFF" />
+              <Text style={styles.directionsBtnText}>Yol Tarifi</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Adım adım yol tarifi */}
+        {destination && panelMode === 'directions' && selectedJourney && (
+          <View style={[styles.resultPanel, { backgroundColor: colors.background, borderTopColor: colors.divider }]}>
+            <View style={styles.directionsHeader}>
+              <TouchableOpacity onPress={() => setPanelMode('compact')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <MaterialIcons name="arrow-back" size={22} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={[styles.h2, { color: colors.textPrimary, marginBottom: 0 }]}>Yol Tarifi</Text>
+              <Text style={[styles.directionsTotal, { color: colors.textSecondary }]}>{selectedJourney.totalApproxMin} dk</Text>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
+              <DirectionSteps journey={selectedJourney} />
+            </ScrollView>
           </View>
         )}
       </View>
@@ -301,6 +349,51 @@ const JourneyCard: React.FC<{ journey: Journey; selected: boolean; onPress: () =
         </View>
       </View>
     </TouchableOpacity>
+  );
+};
+
+const MODE_NAME: Record<string, string> = {
+  bus: 'otobüsüne',
+  tram: 'tramvayına',
+  dolmus: 'dolmuşuna',
+};
+
+const DirectionSteps: React.FC<{ journey: Journey }> = ({ journey }) => {
+  const { colors } = useTheme();
+
+  return (
+    <View>
+      {journey.legs.map((leg, index) => {
+        const isLast = index === journey.legs.length - 1;
+        let icon: IconName = 'directions-walk';
+        let title = '';
+        let detail = '';
+
+        if (leg.type === 'walk') {
+          title = leg.toName === 'Hedef' ? 'Hedefe yürü' : `${leg.toName} durağına yürü`;
+          detail = `${formatMeters(leg.distanceMeters)} • ${leg.approxMin} dk`;
+        } else {
+          icon = MODE_ICON[leg.mode] ?? 'directions-bus';
+          title = `${leg.fromStop.name} durağından ${leg.line} ${MODE_NAME[leg.mode] ?? 'aracına'} bin`;
+          detail = `~${leg.waitMin} dk bekleme • ${leg.numStops} durak (${leg.approxMin} dk) • ${leg.toStop.name} durağında in`;
+        }
+
+        return (
+          <View key={`step-${index}`} style={styles.stepRow}>
+            <View style={styles.stepRail}>
+              <View style={[styles.stepIcon, { backgroundColor: colors.surfaceSecondary }]}>
+                <MaterialIcons name={icon} size={18} color={colors.primaryLight} />
+              </View>
+              {!isLast && <View style={[styles.stepLine, { backgroundColor: colors.divider }]} />}
+            </View>
+            <View style={styles.stepBody}>
+              <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>{index + 1}. {title}</Text>
+              <Text style={[styles.stepDetail, { color: colors.textSecondary }]}>{detail}</Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
   );
 };
 
@@ -405,6 +498,56 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 12,
   },
+  compactBar: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 10,
+    gap: 10,
+  },
+  compactSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  compactTimeline: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 2,
+  },
+  directionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  directionsBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  directionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  directionsTotal: { marginLeft: 'auto', fontSize: 14, fontWeight: '600' },
+  stepRow: { flexDirection: 'row', gap: 12 },
+  stepRail: { alignItems: 'center', width: 34 },
+  stepIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepLine: { width: 2, flex: 1, minHeight: 14, marginVertical: 2 },
+  stepBody: { flex: 1, paddingBottom: 16 },
+  stepTitle: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  stepDetail: { fontSize: 12.5, marginTop: 3, lineHeight: 18 },
   h2: { fontSize: 20, fontWeight: '600' },
   info: { fontSize: 14, lineHeight: 20 },
   center: { paddingVertical: 20, alignItems: 'center' },
