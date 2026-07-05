@@ -51,7 +51,7 @@ function AppContent() {
         return true;
       }
 
-      return false;
+      return true;
     });
 
     return () => subscription.remove();
