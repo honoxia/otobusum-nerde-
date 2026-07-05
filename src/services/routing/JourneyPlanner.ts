@@ -1,21 +1,11 @@
-import stopsData from '../../data/stops-data.json';
-import routesData from '../../data/routes-data.json';
-import tramData from '../../data/tram-data.json';
-import dolmusData from '../../data/dolmus-data.json';
+import graphCoreData from '../../data/transit/graph-core.json';
 import { config } from '../../config';
-import {
-  BusStop,
-  Coordinates,
-  DolmusLine,
-  DolmusWaypoint,
-  TramLine,
-  TramNetwork,
-  TramStop,
-} from '../../types/shared-types';
+import { Coordinates } from '../../types/shared-types';
+import type { TransitGraphCore, TransitGraphPattern } from '../../data/transit/types';
 import { calculateHaversineDistance } from '../../utils/geo.utils';
-import { nearestPointOnPath } from '../../utils/route.utils';
 
 export type TransitMode = 'bus' | 'tram' | 'dolmus' | 'walk';
+export type JourneyLabel = 'fastest' | 'leastWalking' | 'tram' | 'dolmus' | 'balanced';
 
 export interface JourneyStop {
   id: string;
@@ -34,6 +24,7 @@ export interface TransitLeg {
   toStop: JourneyStop;
   numStops: number;
   approxMin: number;
+  waitMin: number;
   coordinates: Coordinates[];
 }
 
@@ -52,18 +43,9 @@ export interface Journey {
   legs: JourneyLeg[];
   totalApproxMin: number;
   transfers: number;
+  walkMeters: number;
   score: number;
-}
-
-interface RouteDirection {
-  routeId: number;
-  direction: string;
-  stopIds: number[];
-}
-
-interface LineRoutes {
-  line: string;
-  routes: RouteDirection[];
+  labels: JourneyLabel[];
 }
 
 interface LinePattern {
@@ -71,7 +53,8 @@ interface LinePattern {
   mode: Exclude<TransitMode, 'walk'>;
   line: string;
   stops: JourneyStop[];
-  shapeCoordinates?: Coordinates[];
+  segmentMeters?: number[];
+  defaultWaitMin: number;
 }
 
 interface NearbyStop {
@@ -103,6 +86,11 @@ function distanceAlongStops(stops: JourneyStop[], fromIndex: number, toIndex: nu
   return total;
 }
 
+function distanceAlongSegments(segmentMeters: number[] | undefined, fromIndex: number, toIndex: number): number | null {
+  if (!segmentMeters || segmentMeters.length < toIndex) return null;
+  return segmentMeters.slice(fromIndex, toIndex).reduce((sum, meters) => sum + meters, 0);
+}
+
 function distanceAlongCoordinates(coordinates: Coordinates[]): number {
   let total = 0;
   for (let i = 0; i < coordinates.length - 1; i += 1) {
@@ -119,6 +107,7 @@ class JourneyPlanner {
   private readonly stops: JourneyStop[] = [];
   private readonly patterns: LinePattern[] = [];
   private readonly stopPatternIndex = new Map<string, PatternStopMatch[]>();
+  private readonly transferIndex = new Map<string, NearbyStop[]>();
 
   constructor() {
     this.buildIndexes();
@@ -155,78 +144,59 @@ class JourneyPlanner {
         return arr.findIndex((candidate) => this.journeySignature(candidate) === signature) === index;
       });
 
-    return this.diversifyJourneys(ranked, resultLimit);
+    return this.labelJourneys(this.diversifyJourneys(ranked, resultLimit));
   }
 
   private buildIndexes(): void {
-    const busStops = stopsData as BusStop[];
-    const busStopByWialon = new Map<number, JourneyStop>();
+    const graphCore = graphCoreData as TransitGraphCore;
+    const stopById = new Map<string, JourneyStop>();
 
-    busStops.forEach((stop) => {
-      if (!stop.wialonId) return;
+    graphCore.stops.forEach((stop) => {
       const journeyStop: JourneyStop = {
-        id: `bus:${stop.wialonId}`,
-        sourceId: stop.wialonId,
+        id: stop.id,
+        sourceId: stop.sourceId,
         name: stop.name,
-        mode: 'bus',
+        mode: stop.mode,
         coordinates: stop.coordinates,
         lines: stop.lines,
       };
       this.stops.push(journeyStop);
-      busStopByWialon.set(stop.wialonId, journeyStop);
+      stopById.set(stop.id, journeyStop);
     });
 
-    (routesData as LineRoutes[]).forEach((lineRoutes) => {
-      lineRoutes.routes.forEach((route) => {
-        const stops = route.stopIds
-          .map((stopId) => busStopByWialon.get(stopId))
-          .filter((stop): stop is JourneyStop => !!stop);
-        if (stops.length >= 2) {
-          this.patterns.push({
-            id: `bus:${route.routeId}`,
-            mode: 'bus',
-            line: lineRoutes.line,
-            stops,
-          });
-        }
-      });
-    });
-
-    const tramNetwork = tramData as TramNetwork;
-    const tramStops = tramNetwork.stops.map((stop) => this.toTramStop(stop));
-    this.stops.push(...tramStops);
-
-    tramNetwork.lines.forEach((line) => {
-      const orderedStops = this.orderTramStops(line, tramStops);
-      if (orderedStops.length >= 2) {
-          this.patterns.push({
-            id: `tram:${line.id}`,
-            mode: 'tram',
-            line: line.ref || line.name,
-            stops: orderedStops,
-            shapeCoordinates: line.paths.flat(),
-          });
-        }
-      });
-
-    (dolmusData as DolmusLine[]).forEach((line, lineIndex) => {
-      const stops = line.waypoints
-        .filter((waypoint) => waypoint.coordinates)
-        .map((waypoint, waypointIndex) => this.toDolmusStop(line, waypoint, lineIndex, waypointIndex));
-      this.stops.push(...stops);
+    graphCore.patterns.forEach((pattern: TransitGraphPattern) => {
+      const stops = pattern.stopIds
+        .map((stopId) => stopById.get(stopId))
+        .filter((stop): stop is JourneyStop => !!stop);
 
       if (stops.length >= 2) {
         this.patterns.push({
-          id: `dolmus:${line.line}`,
-          mode: 'dolmus',
-          line: line.line,
+          id: pattern.id,
+          mode: pattern.mode,
+          line: pattern.line,
           stops,
-          shapeCoordinates: line.path,
+          segmentMeters: pattern.segmentMeters,
+          defaultWaitMin: pattern.defaultWaitMin ?? this.defaultWaitForMode(pattern.mode),
         });
       }
     });
 
+    graphCore.transfers.forEach((transfer) => {
+      const toStop = stopById.get(transfer.toStopId);
+      if (!toStop) return;
+
+      const transfers = this.transferIndex.get(transfer.fromStopId) ?? [];
+      transfers.push({ stop: toStop, distance: transfer.distanceMeters });
+      this.transferIndex.set(transfer.fromStopId, transfers);
+    });
+
     this.buildStopPatternIndex();
+  }
+
+  private defaultWaitForMode(mode: Exclude<TransitMode, 'walk'>): number {
+    if (mode === 'tram') return 6;
+    if (mode === 'dolmus') return 8;
+    return 10;
   }
 
   private buildStopPatternIndex(): void {
@@ -237,47 +207,6 @@ class JourneyPlanner {
         this.stopPatternIndex.set(stop.id, matches);
       });
     });
-  }
-
-  private toTramStop(stop: TramStop): JourneyStop {
-    return {
-      id: `tram:${stop.id}`,
-      sourceId: stop.id,
-      name: stop.name,
-      mode: 'tram',
-      coordinates: stop.coordinates,
-      lines: stop.lines,
-    };
-  }
-
-  private toDolmusStop(
-    line: DolmusLine,
-    waypoint: DolmusWaypoint,
-    lineIndex: number,
-    waypointIndex: number
-  ): JourneyStop {
-    return {
-      id: `dolmus:${lineIndex}:${waypointIndex}`,
-      name: waypoint.name,
-      mode: 'dolmus',
-      coordinates: waypoint.coordinates as Coordinates,
-      lines: [line.line],
-    };
-  }
-
-  private orderTramStops(line: TramLine, stops: JourneyStop[]): JourneyStop[] {
-    const path = line.paths.flat();
-    if (path.length < 2) return [];
-
-    return stops
-      .filter((stop) => stop.lines.includes(line.ref))
-      .map((stop) => {
-        const nearest = nearestPointOnPath(stop.coordinates, path);
-        return nearest ? { stop, cumulative: nearest.cumulativeMeters } : null;
-      })
-      .filter((entry): entry is { stop: JourneyStop; cumulative: number } => !!entry)
-      .sort((a, b) => a.cumulative - b.cumulative)
-      .map((entry) => entry.stop);
   }
 
   private nearbyStops(point: Coordinates, radiusMeters: number, fallbackLimit: number): NearbyStop[] {
@@ -372,7 +301,7 @@ class JourneyPlanner {
         const maxTransferIndex = Math.min(firstPattern.stops.length, fromIndex + 14);
         for (let transferFromIndex = fromIndex + 1; transferFromIndex < maxTransferIndex; transferFromIndex += 1) {
           const transferFrom = firstPattern.stops[transferFromIndex];
-          const transferCandidates = this.nearbyStopsWithin(transferFrom.coordinates, 250, 3);
+          const transferCandidates = this.transferCandidatesForStop(transferFrom);
 
           for (const transferTo of transferCandidates) {
             const secondMatches = this.stopPatternIndex.get(transferTo.stop.id) ?? [];
@@ -411,14 +340,25 @@ class JourneyPlanner {
     return journeys;
   }
 
+  private transferCandidatesForStop(stop: JourneyStop): NearbyStop[] {
+    const graphTransfers = this.transferIndex.get(stop.id);
+    if (graphTransfers && graphTransfers.length > 0) {
+      return graphTransfers.slice(0, 4);
+    }
+
+    return this.nearbyStopsWithin(stop.coordinates, 250, 3);
+  }
+
   private createTransitLeg(pattern: LinePattern, fromIndex: number, toIndex: number): TransitLeg {
     const coordinates = this.getTransitLegCoordinates(pattern, fromIndex, toIndex);
     const distanceMeters =
-      coordinates.length > 2
+      distanceAlongSegments(pattern.segmentMeters, fromIndex, toIndex) ??
+      (coordinates.length > 2
         ? distanceAlongCoordinates(coordinates)
-        : distanceAlongStops(pattern.stops, fromIndex, toIndex);
+        : distanceAlongStops(pattern.stops, fromIndex, toIndex));
     const averageSpeed = pattern.mode === 'tram' ? 24 : config.app.defaultBusSpeedKmh;
     const approxMin = roundMinutes(((distanceMeters * 1.25) / 1000 / averageSpeed) * 60);
+    const waitMin = pattern.defaultWaitMin;
 
     return {
       type: 'transit',
@@ -428,39 +368,13 @@ class JourneyPlanner {
       toStop: pattern.stops[toIndex],
       numStops: toIndex - fromIndex,
       approxMin,
+      waitMin,
       coordinates,
     };
   }
 
   private getTransitLegCoordinates(pattern: LinePattern, fromIndex: number, toIndex: number): Coordinates[] {
-    const fallback = pattern.stops.slice(fromIndex, toIndex + 1).map((stop) => stop.coordinates);
-
-    if (!pattern.shapeCoordinates || pattern.shapeCoordinates.length < 2) {
-      return fallback;
-    }
-
-    const from = nearestPointOnPath(pattern.stops[fromIndex].coordinates, pattern.shapeCoordinates);
-    const to = nearestPointOnPath(pattern.stops[toIndex].coordinates, pattern.shapeCoordinates);
-    if (!from || !to || from.cumulativeMeters >= to.cumulativeMeters) {
-      return fallback;
-    }
-
-    const cumulative = this.pathCumulativeDistances(pattern.shapeCoordinates);
-    const middle = pattern.shapeCoordinates.filter((_, index) => {
-      const meters = cumulative[index];
-      return meters > from.cumulativeMeters && meters < to.cumulativeMeters;
-    });
-
-    const coordinates = [from.point, ...middle, to.point];
-    return coordinates.length >= 2 ? coordinates : fallback;
-  }
-
-  private pathCumulativeDistances(path: Coordinates[]): number[] {
-    const distances = [0];
-    for (let i = 1; i < path.length; i += 1) {
-      distances.push(distances[i - 1] + calculateHaversineDistance(path[i - 1], path[i]));
-    }
-    return distances;
+    return pattern.stops.slice(fromIndex, toIndex + 1).map((stop) => stop.coordinates);
   }
 
   private createWalkLeg(
@@ -480,15 +394,29 @@ class JourneyPlanner {
   }
 
   private createJourney(legs: JourneyLeg[], transfers: number): Journey {
-    const totalApproxMin = legs.reduce((sum, leg) => sum + leg.approxMin, 0) + transfers * TRANSFER_PENALTY_MIN;
+    const waitMinutes = legs.reduce((sum, leg) => (leg.type === 'transit' ? sum + leg.waitMin : sum), 0);
+    const totalApproxMin = legs.reduce((sum, leg) => sum + leg.approxMin, 0) + waitMinutes + transfers * TRANSFER_PENALTY_MIN;
     const walkMeters = legs.reduce((sum, leg) => (leg.type === 'walk' ? sum + leg.distanceMeters : sum), 0);
+    const modePenalty = this.modePenalty(legs);
 
     return {
       legs,
       transfers,
+      walkMeters,
       totalApproxMin: roundMinutes(totalApproxMin),
-      score: totalApproxMin + walkMeters / 250,
+      score: totalApproxMin + walkMeters / 220 + transfers * 2 + modePenalty,
+      labels: [],
     };
+  }
+
+  private modePenalty(legs: JourneyLeg[]): number {
+    const transitModes = legs
+      .filter((leg): leg is TransitLeg => leg.type === 'transit')
+      .map((leg) => leg.mode);
+
+    if (transitModes.includes('tram')) return -2;
+    if (transitModes.includes('dolmus')) return 1;
+    return 0;
   }
 
   private journeySignature(journey: Journey): string {
@@ -526,6 +454,32 @@ class JourneyPlanner {
     }
 
     return selected;
+  }
+
+  private labelJourneys(journeys: Journey[]): Journey[] {
+    if (journeys.length === 0) return journeys;
+
+    const fastest = journeys.reduce((best, journey) =>
+      journey.totalApproxMin < best.totalApproxMin ? journey : best
+    );
+    const leastWalking = journeys.reduce((best, journey) =>
+      journey.walkMeters < best.walkMeters ? journey : best
+    );
+
+    return journeys.map((journey) => {
+      const labels: JourneyLabel[] = [];
+      const transitModes = journey.legs
+        .filter((leg): leg is TransitLeg => leg.type === 'transit')
+        .map((leg) => leg.mode);
+
+      if (journey === fastest) labels.push('fastest');
+      if (journey === leastWalking && journey !== fastest) labels.push('leastWalking');
+      if (transitModes.includes('tram')) labels.push('tram');
+      if (transitModes.includes('dolmus')) labels.push('dolmus');
+      if (labels.length === 0) labels.push('balanced');
+
+      return { ...journey, labels: labels.slice(0, 2) };
+    });
   }
 }
 

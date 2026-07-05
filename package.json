@@ -7,6 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build:transit-graph": "node scripts/build-transit-graph.js",
+    "typecheck": "tsc --noEmit",
     "build:apk": "eas build --platform android --profile preview"
   },
   "dependencies": {

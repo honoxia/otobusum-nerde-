@@ -411,7 +411,7 @@ export function buildOsmHtml({ tileUrl }: BuildOsmHtmlParams): string {
 
           var color = '#111827';
           if (leg.type === 'transit') {
-            color = '#22C55E';
+            color = leg.mode === 'tram' ? '#4F46E5' : leg.mode === 'dolmus' ? '#F97316' : '#22C55E';
           }
 
           L.polyline(latLngs, {

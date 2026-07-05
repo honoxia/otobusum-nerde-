@@ -17,7 +17,7 @@ import { buildOsmHtml } from '../components/Map/osmMapHtml';
 import { AppTopBar } from '../components/common/AppTopBar';
 import { AppBottomNav } from '../components/common/AppBottomNav';
 import { useLocation } from '../hooks/useLocation';
-import journeyPlanner, { Journey, JourneyLeg, JourneyStop } from '../services/routing/JourneyPlanner';
+import journeyPlanner, { Journey, JourneyLabel, JourneyLeg, JourneyStop } from '../services/routing/JourneyPlanner';
 import tramService from '../services/tram/TramService';
 import { Coordinates } from '../types/shared-types';
 
@@ -38,8 +38,25 @@ const MODE_ICON: Record<string, IconName> = {
   dolmus: 'airport-shuttle',
 };
 
+const JOURNEY_LABEL: Record<JourneyLabel, { text: string; icon: IconName }> = {
+  fastest: { text: 'En Hızlı', icon: 'bolt' },
+  leastWalking: { text: 'Az Yürüyüş', icon: 'directions-walk' },
+  tram: { text: 'Tramvaylı', icon: 'tram' },
+  dolmus: { text: 'Dolmuş', icon: 'airport-shuttle' },
+  balanced: { text: 'Dengeli', icon: 'alt-route' },
+};
+
 function fmtTime(d: Date): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function formatMeters(meters: number): string {
+  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+  return `${Math.round(meters)} m`;
+}
+
+function journeyWaitMinutes(journey: Journey): number {
+  return journey.legs.reduce((sum, leg) => (leg.type === 'transit' ? sum + leg.waitMin : sum), 0);
 }
 
 export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }) => {
@@ -196,7 +213,6 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
                   <JourneyCard
                     key={`${journey.score}-${index}`}
                     journey={journey}
-                    fastest={index === 0}
                     selected={index === selectedIndex}
                     onPress={() => setSelectedIndex(index)}
                   />
@@ -212,9 +228,14 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
   );
 };
 
-const JourneyCard: React.FC<{ journey: Journey; fastest: boolean; selected: boolean; onPress: () => void }> = ({ journey, fastest, selected, onPress }) => {
+const JourneyCard: React.FC<{ journey: Journey; selected: boolean; onPress: () => void }> = ({ journey, selected, onPress }) => {
   const { colors } = useTheme();
-  const accent = fastest ? colors.primary : colors.warning;
+  const primaryLabel = journey.labels[0] ?? 'balanced';
+  const label = JOURNEY_LABEL[primaryLabel];
+  const accent = primaryLabel === 'fastest' ? colors.primary : primaryLabel === 'leastWalking' ? colors.success : colors.warning;
+  const secondaryLabels = journey.labels.slice(1);
+  const walkSummary = formatMeters(journey.walkMeters);
+  const waitSummary = journeyWaitMinutes(journey);
   const now = new Date();
   const end = new Date(now.getTime() + journey.totalApproxMin * 60000);
 
@@ -231,16 +252,30 @@ const JourneyCard: React.FC<{ journey: Journey; fastest: boolean; selected: bool
       <View style={styles.routeHeader}>
         <View>
           <View style={styles.minRow}>
-            <Text style={[styles.minBig, { color: fastest ? colors.primaryLight : colors.textPrimary }]}>{journey.totalApproxMin}</Text>
+            <Text style={[styles.minBig, { color: primaryLabel === 'fastest' ? colors.primaryLight : colors.textPrimary }]}>{journey.totalApproxMin}</Text>
             <Text style={[styles.minUnit, { color: colors.textSecondary }]}>dk</Text>
           </View>
           <Text style={[styles.timeRange, { color: colors.textSecondary }]}>{fmtTime(now)} - {fmtTime(end)}</Text>
         </View>
         <View style={[styles.badge, { backgroundColor: accent + '29' }]}>
-          <MaterialIcons name={fastest ? 'bolt' : 'accessible'} size={15} color={accent} />
-          <Text style={[styles.badgeText, { color: accent }]}>{fastest ? 'En Hızlı' : 'Alternatif'}</Text>
+          <MaterialIcons name={label.icon} size={15} color={accent} />
+          <Text style={[styles.badgeText, { color: accent }]}>{label.text}</Text>
         </View>
       </View>
+
+      {secondaryLabels.length > 0 && (
+        <View style={styles.labelRow}>
+          {secondaryLabels.map((item) => {
+            const secondary = JOURNEY_LABEL[item];
+            return (
+              <View key={item} style={[styles.subBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                <MaterialIcons name={secondary.icon} size={13} color={colors.textSecondary} />
+                <Text style={[styles.subBadgeText, { color: colors.textSecondary }]}>{secondary.text}</Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       <View style={styles.timeline}>
         {journey.legs.map((leg, i) => (
@@ -249,6 +284,21 @@ const JourneyCard: React.FC<{ journey: Journey; fastest: boolean; selected: bool
             <LegChip leg={leg} />
           </React.Fragment>
         ))}
+      </View>
+
+      <View style={[styles.routeMetaRow, { borderTopColor: colors.divider }]}>
+        <View style={styles.routeMetaItem}>
+          <MaterialIcons name="directions-walk" size={14} color={colors.textSecondary} />
+          <Text style={[styles.routeMetaText, { color: colors.textSecondary }]}>{walkSummary}</Text>
+        </View>
+        <View style={styles.routeMetaItem}>
+          <MaterialIcons name="hourglass-empty" size={14} color={colors.textSecondary} />
+          <Text style={[styles.routeMetaText, { color: colors.textSecondary }]}>{waitSummary} dk bekleme</Text>
+        </View>
+        <View style={styles.routeMetaItem}>
+          <MaterialIcons name="sync-alt" size={14} color={colors.textSecondary} />
+          <Text style={[styles.routeMetaText, { color: colors.textSecondary }]}>{journey.transfers} aktarma</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -373,7 +423,26 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   badgeText: { fontSize: 12, fontWeight: '600' },
+  labelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  subBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  subBadgeText: { fontSize: 11, fontWeight: '600' },
   timeline: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  routeMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  routeMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  routeMetaText: { fontSize: 11, fontWeight: '600' },
   walkChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   walkText: { fontSize: 12 },
   transitChip: {
