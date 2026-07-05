@@ -4,7 +4,6 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { AppTopBar } from '../common/AppTopBar';
-import { AppBottomNav } from '../common/AppBottomNav';
 import { DolmusLine } from '../../types/shared-types';
 
 interface DolmusLinesScreenProps {
@@ -94,7 +93,6 @@ export const DolmusLinesScreen: React.FC<DolmusLinesScreenProps> = ({ lines, onS
         </View>
       </ScrollView>
 
-      <AppBottomNav active="home" onHome={onBack} />
     </View>
   );
 };

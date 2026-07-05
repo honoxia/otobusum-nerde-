@@ -20,7 +20,6 @@ import { ETACard } from '../components/ETACard/ETACard';
 import { StopDetailSheet, StopDetailSheetRef } from '../components/BottomSheet/StopDetailSheet';
 import { SkeletonCard } from '../components/common/Skeleton';
 import { AppTopBar } from '../components/common/AppTopBar';
-import { AppBottomNav } from '../components/common/AppBottomNav';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocation } from '../hooks/useLocation';
 import { useStops } from '../hooks/useStops';
@@ -425,7 +424,6 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
         </View>
       </View>
 
-      <AppBottomNav active="home" onHome={onBack} />
 
       <StopDetailSheet
         ref={bottomSheetRef}

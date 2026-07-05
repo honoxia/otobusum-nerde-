@@ -15,7 +15,6 @@ import { useTheme } from '../theme';
 import { config } from '../config';
 import { buildOsmHtml } from '../components/Map/osmMapHtml';
 import { AppTopBar } from '../components/common/AppTopBar';
-import { AppBottomNav } from '../components/common/AppBottomNav';
 import { useLocation } from '../hooks/useLocation';
 import journeyPlanner, { Journey, JourneyLabel, JourneyLeg, JourneyStop } from '../services/routing/JourneyPlanner';
 import tramService from '../services/tram/TramService';
@@ -271,7 +270,6 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
         )}
       </View>
 
-      <AppBottomNav active="home" onHome={onBack} />
     </View>
   );
 };

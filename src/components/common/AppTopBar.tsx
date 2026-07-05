@@ -14,17 +14,18 @@ interface AppTopBarProps {
  */
 export const AppTopBar: React.FC<AppTopBarProps> = ({ onBack, leftIcon }) => {
   const { colors } = useTheme();
-  const icon = leftIcon ?? (onBack ? 'arrow-back' : 'menu');
 
   return (
     <View style={styles.bar}>
-      <TouchableOpacity style={styles.iconBtn} onPress={onBack} disabled={!onBack} activeOpacity={0.7}>
-        <MaterialIcons name={icon} size={24} color={colors.textSecondary} />
-      </TouchableOpacity>
+      {onBack ? (
+        <TouchableOpacity style={styles.iconBtn} onPress={onBack} activeOpacity={0.7}>
+          <MaterialIcons name={leftIcon ?? 'arrow-back'} size={24} color={colors.textSecondary} />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.iconBtn} />
+      )}
       <Text style={[styles.brand, { color: colors.primaryLight }]}>Ulaşım Rehberi</Text>
-      <View style={styles.iconBtn}>
-        <MaterialIcons name="accessibility-new" size={24} color={colors.primaryLight} />
-      </View>
+      <View style={styles.iconBtn} />
     </View>
   );
 };

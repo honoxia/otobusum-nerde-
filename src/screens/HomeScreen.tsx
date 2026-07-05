@@ -10,7 +10,6 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { AppTopBar } from '../components/common/AppTopBar';
-import { AppBottomNav } from '../components/common/AppBottomNav';
 
 export type AppScreen = 'home' | 'bus' | 'tram' | 'dolmus' | 'route';
 
@@ -62,7 +61,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelect }) => {
         </View>
       </ScrollView>
 
-      <AppBottomNav active="home" />
     </View>
   );
 };
