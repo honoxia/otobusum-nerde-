@@ -121,6 +121,7 @@ class JourneyPlanner {
   private readonly transferIndex = new Map<string, NearbyStop[]>();
   private readonly frequenciesByPattern = new Map<string, TransitFrequency[]>();
   private readonly departuresByPattern = new Map<string, TransitDepartureSchedule[]>();
+  private readonly transferFallbackCache = new Map<string, NearbyStop[]>();
 
   constructor() {
     this.buildIndexes();
@@ -150,11 +151,14 @@ class JourneyPlanner {
       journeys.push(...this.findOneTransferJourneys(origin, destination, originStops, destinationStops, now));
     }
 
+    const seenSignatures = new Set<string>();
     const ranked = journeys
       .sort((a, b) => a.score - b.score)
-      .filter((journey, index, arr) => {
+      .filter((journey) => {
         const signature = this.journeySignature(journey);
-        return arr.findIndex((candidate) => this.journeySignature(candidate) === signature) === index;
+        if (seenSignatures.has(signature)) return false;
+        seenSignatures.add(signature);
+        return true;
       });
 
     return this.labelJourneys(this.diversifyJourneys(ranked, resultLimit));
@@ -295,15 +299,17 @@ class JourneyPlanner {
     now: Date
   ): Journey[] {
     const journeys: Journey[] = [];
-    const destinationByStopId = new Map(destinationStops.map((entry) => [entry.stop.id, entry]));
+    const destMatchesByPattern = this.destinationMatchesByPattern(destinationStops);
 
     for (const originStop of originStops) {
       const originMatches = this.stopPatternIndex.get(originStop.stop.id) ?? [];
 
       for (const { pattern, index: fromIndex } of originMatches) {
-        for (let toIndex = fromIndex + 1; toIndex < pattern.stops.length; toIndex += 1) {
-          const destinationStop = destinationByStopId.get(pattern.stops[toIndex].id);
-          if (!destinationStop) continue;
+        const destMatches = destMatchesByPattern.get(pattern.id);
+        if (!destMatches) continue;
+
+        for (const { index: toIndex, entry: destinationStop } of destMatches) {
+          if (toIndex <= fromIndex) continue;
           const transitLeg = this.createTransitLeg(pattern, fromIndex, toIndex, now);
           const walkToStart = this.createWalkLeg('Konumun', originStop.stop.name, originStop.distance, [
             origin,
@@ -330,27 +336,34 @@ class JourneyPlanner {
     now: Date
   ): Journey[] {
     const journeys: Journey[] = [];
-    const destinationByStopId = new Map(destinationStops.map((entry) => [entry.stop.id, entry]));
+    const destMatchesByPattern = this.destinationMatchesByPattern(destinationStops);
 
     for (const originStop of originStops) {
       const originMatches = this.stopPatternIndex.get(originStop.stop.id) ?? [];
+      const walkToStart = this.createWalkLeg('Konumun', originStop.stop.name, originStop.distance, [
+        origin,
+        originStop.stop.coordinates,
+      ]);
 
       for (const { pattern: firstPattern, index: fromIndex } of originMatches) {
         const maxTransferIndex = Math.min(firstPattern.stops.length, fromIndex + 14);
         for (let transferFromIndex = fromIndex + 1; transferFromIndex < maxTransferIndex; transferFromIndex += 1) {
           const transferFrom = firstPattern.stops[transferFromIndex];
           const transferCandidates = this.transferCandidatesForStop(transferFrom);
+          // Built lazily: most transfer candidates never reach a destination pattern.
+          let firstLeg: TransitLeg | null = null;
 
           for (const transferTo of transferCandidates) {
             const secondMatches = this.stopPatternIndex.get(transferTo.stop.id) ?? [];
 
             for (const { pattern: secondPattern, index: transferToIndex } of secondMatches) {
               if (secondPattern.id === firstPattern.id) continue;
+              const destMatches = destMatchesByPattern.get(secondPattern.id);
+              if (!destMatches) continue;
 
-              for (let toIndex = transferToIndex + 1; toIndex < secondPattern.stops.length; toIndex += 1) {
-                const destinationStop = destinationByStopId.get(secondPattern.stops[toIndex].id);
-                if (!destinationStop) continue;
-                const firstLeg = this.createTransitLeg(firstPattern, fromIndex, transferFromIndex, now);
+              for (const { index: toIndex, entry: destinationStop } of destMatches) {
+                if (toIndex <= transferToIndex) continue;
+                firstLeg = firstLeg ?? this.createTransitLeg(firstPattern, fromIndex, transferFromIndex, now);
                 const transferWalk = this.createWalkLeg(
                   transferFrom.name,
                   transferTo.stop.name,
@@ -358,10 +371,6 @@ class JourneyPlanner {
                   [transferFrom.coordinates, transferTo.stop.coordinates]
                 );
                 const secondLeg = this.createTransitLeg(secondPattern, transferToIndex, toIndex, now);
-                const walkToStart = this.createWalkLeg('Konumun', originStop.stop.name, originStop.distance, [
-                  origin,
-                  originStop.stop.coordinates,
-                ]);
                 const walkToDestination = this.createWalkLeg(destinationStop.stop.name, 'Hedef', destinationStop.distance, [
                   destinationStop.stop.coordinates,
                   destination,
@@ -378,13 +387,35 @@ class JourneyPlanner {
     return journeys;
   }
 
+  private destinationMatchesByPattern(
+    destinationStops: NearbyStop[]
+  ): Map<string, Array<{ index: number; entry: NearbyStop }>> {
+    const matchesByPattern = new Map<string, Array<{ index: number; entry: NearbyStop }>>();
+
+    destinationStops.forEach((entry) => {
+      (this.stopPatternIndex.get(entry.stop.id) ?? []).forEach(({ pattern, index }) => {
+        const matches = matchesByPattern.get(pattern.id) ?? [];
+        matches.push({ index, entry });
+        matchesByPattern.set(pattern.id, matches);
+      });
+    });
+
+    return matchesByPattern;
+  }
+
   private transferCandidatesForStop(stop: JourneyStop): NearbyStop[] {
     const graphTransfers = this.transferIndex.get(stop.id);
     if (graphTransfers && graphTransfers.length > 0) {
       return graphTransfers.slice(0, 4);
     }
 
-    return this.nearbyStopsWithin(stop.coordinates, 250, 3);
+    // Full-stop scans are expensive; cache per stop so repeated visits are free.
+    const cached = this.transferFallbackCache.get(stop.id);
+    if (cached) return cached;
+
+    const fallback = this.nearbyStopsWithin(stop.coordinates, 250, 3);
+    this.transferFallbackCache.set(stop.id, fallback);
+    return fallback;
   }
 
   private createTransitLeg(pattern: LinePattern, fromIndex: number, toIndex: number, now: Date): TransitLeg {
