@@ -7,8 +7,8 @@ const tramData = require('../src/data/tram-data.json');
 const dolmusData = require('../src/data/dolmus-data.json');
 
 const OUT_DIR = path.join(__dirname, '..', 'src', 'data', 'transit');
-const GENERATED_AT = new Date().toISOString();
 const VERSION = '1.1-phase-a';
+const GENERATED_AT = readExistingGeneratedAt() || new Date().toISOString();
 
 const MAX_BYTES = {
   'graph-core.json': 1_250_000,
@@ -24,6 +24,17 @@ const DEFAULT_WAIT_MIN = {
 const WALK_SPEED_M_PER_MIN = 5000 / 60;
 const TRANSFER_RADIUS_M = 250;
 const MAX_TRANSFERS_PER_STOP = 6;
+
+function readExistingGeneratedAt() {
+  try {
+    const corePath = path.join(OUT_DIR, 'graph-core.json');
+    if (!fs.existsSync(corePath)) return null;
+    const core = JSON.parse(fs.readFileSync(corePath, 'utf8'));
+    return core?.metadata?.version === VERSION ? core.metadata.generatedAt : null;
+  } catch {
+    return null;
+  }
+}
 
 function roundCoord(value) {
   return Number(value.toFixed(5));
