@@ -55,7 +55,7 @@ export const RoutePlannerScreen: React.FC<RoutePlannerScreenProps> = ({ onBack }
   const suggestions = useMemo(() => journeyPlanner.searchStops(query, 6), [query]);
   const journeys = useMemo(() => {
     if (!location || !destination) return [];
-    return journeyPlanner.plan(location, destination.coordinates, 3);
+    return journeyPlanner.plan(location, destination.coordinates, 1, 5);
   }, [location, destination]);
   const selectedJourney = journeys[selectedIndex] ?? journeys[0] ?? null;
 

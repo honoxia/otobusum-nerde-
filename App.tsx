@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, BackHandler, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import { MaterialIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -10,13 +10,24 @@ import { ThemeProvider } from './src/theme';
 import { HomeScreen, AppScreen } from './src/screens/HomeScreen';
 import { BusScreen } from './src/screens/BusScreen';
 import { TramScreen } from './src/screens/TramScreen';
-import { RoutePlannerScreen } from './src/screens/RoutePlannerScreen';
 import { DolmusLinesScreen } from './src/components/Dolmus/DolmusLinesScreen';
 import { DolmusMapScreen } from './src/components/Dolmus/DolmusMapScreen';
 import dolmusData from './src/data/dolmus-data.json';
 import { DolmusLine } from './src/types/shared-types';
 
 global.Buffer = Buffer;
+
+type RoutePlannerComponent = React.ComponentType<{ onBack: () => void }>;
+
+let RoutePlannerScreenComponent: RoutePlannerComponent | null = null;
+
+function getRoutePlannerScreen(): RoutePlannerComponent {
+  if (!RoutePlannerScreenComponent) {
+    RoutePlannerScreenComponent = require('./src/screens/RoutePlannerScreen').RoutePlannerScreen;
+  }
+
+  return RoutePlannerScreenComponent as RoutePlannerComponent;
+}
 
 function AppContent() {
   const [screen, setScreen] = useState<AppScreen>('home');
@@ -27,6 +38,24 @@ function AppContent() {
     setSelectedDolmusLines(null);
     setScreen('home');
   };
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (selectedDolmusLines) {
+        setSelectedDolmusLines(null);
+        return true;
+      }
+
+      if (screen !== 'home') {
+        goHome();
+        return true;
+      }
+
+      return false;
+    });
+
+    return () => subscription.remove();
+  }, [screen, selectedDolmusLines]);
 
   if (screen === 'bus') {
     return <BusScreen onBack={goHome} />;
@@ -45,6 +74,7 @@ function AppContent() {
   }
 
   if (screen === 'route') {
+    const RoutePlannerScreen = getRoutePlannerScreen();
     return <RoutePlannerScreen onBack={goHome} />;
   }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -56,7 +56,7 @@ function groupDolmusLines(lines: DolmusLine[]): DolmusLineGroup[] {
 
 export const DolmusLinesScreen: React.FC<DolmusLinesScreenProps> = ({ lines, onSelect, onBack }) => {
   const { colors } = useTheme();
-  const groups = groupDolmusLines(lines);
+  const groups = useMemo(() => groupDolmusLines(lines), [lines]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
