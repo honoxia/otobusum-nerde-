@@ -1,21 +1,19 @@
-import stopsData from '../../data/stops-data.json';
-import routesData from '../../data/routes-data.json';
-import tramData from '../../data/tram-data.json';
-import dolmusData from '../../data/dolmus-data.json';
+import graphCoreData from '../../data/transit/graph-core.json';
+import schedulesData from '../../data/transit/schedules.json';
 import { config } from '../../config';
-import {
-  BusStop,
-  Coordinates,
-  DolmusLine,
-  DolmusWaypoint,
-  TramLine,
-  TramNetwork,
-  TramStop,
-} from '../../types/shared-types';
+import { Coordinates } from '../../types/shared-types';
+import type {
+  TransitDepartureSchedule,
+  TransitFrequency,
+  TransitGraphCore,
+  TransitGraphPattern,
+  TransitGraphSchedules,
+  TransitServiceId,
+} from '../../data/transit/types';
 import { calculateHaversineDistance } from '../../utils/geo.utils';
-import { nearestPointOnPath } from '../../utils/route.utils';
 
 export type TransitMode = 'bus' | 'tram' | 'dolmus' | 'walk';
+export type JourneyLabel = 'fastest' | 'leastWalking' | 'tram' | 'dolmus' | 'balanced';
 
 export interface JourneyStop {
   id: string;
@@ -34,6 +32,7 @@ export interface TransitLeg {
   toStop: JourneyStop;
   numStops: number;
   approxMin: number;
+  waitMin: number;
   coordinates: Coordinates[];
 }
 
@@ -52,18 +51,9 @@ export interface Journey {
   legs: JourneyLeg[];
   totalApproxMin: number;
   transfers: number;
+  walkMeters: number;
   score: number;
-}
-
-interface RouteDirection {
-  routeId: number;
-  direction: string;
-  stopIds: number[];
-}
-
-interface LineRoutes {
-  line: string;
-  routes: RouteDirection[];
+  labels: JourneyLabel[];
 }
 
 interface LinePattern {
@@ -71,7 +61,10 @@ interface LinePattern {
   mode: Exclude<TransitMode, 'walk'>;
   line: string;
   stops: JourneyStop[];
-  shapeCoordinates?: Coordinates[];
+  segmentMeters?: number[];
+  stopOffsetsMin?: Array<number | null>;
+  scheduleIds?: string[];
+  defaultWaitMin: number;
 }
 
 interface NearbyStop {
@@ -86,6 +79,7 @@ interface PatternStopMatch {
 
 const WALK_SPEED_M_PER_MIN = 5000 / 60;
 const TRANSFER_PENALTY_MIN = 6;
+const MINUTES_PER_DAY = 24 * 60;
 
 function walkingMinutes(distanceMeters: number): number {
   return distanceMeters / WALK_SPEED_M_PER_MIN;
@@ -101,6 +95,11 @@ function distanceAlongStops(stops: JourneyStop[], fromIndex: number, toIndex: nu
     total += calculateHaversineDistance(stops[i].coordinates, stops[i + 1].coordinates);
   }
   return total;
+}
+
+function distanceAlongSegments(segmentMeters: number[] | undefined, fromIndex: number, toIndex: number): number | null {
+  if (!segmentMeters || segmentMeters.length < toIndex) return null;
+  return segmentMeters.slice(fromIndex, toIndex).reduce((sum, meters) => sum + meters, 0);
 }
 
 function distanceAlongCoordinates(coordinates: Coordinates[]): number {
@@ -119,6 +118,10 @@ class JourneyPlanner {
   private readonly stops: JourneyStop[] = [];
   private readonly patterns: LinePattern[] = [];
   private readonly stopPatternIndex = new Map<string, PatternStopMatch[]>();
+  private readonly transferIndex = new Map<string, NearbyStop[]>();
+  private readonly frequenciesByPattern = new Map<string, TransitFrequency[]>();
+  private readonly departuresByPattern = new Map<string, TransitDepartureSchedule[]>();
+  private readonly transferFallbackCache = new Map<string, NearbyStop[]>();
 
   constructor() {
     this.buildIndexes();
@@ -133,7 +136,7 @@ class JourneyPlanner {
       .slice(0, limit);
   }
 
-  plan(origin: Coordinates, destination: Coordinates, maxTransfers = 1, resultLimit = 5): Journey[] {
+  plan(origin: Coordinates, destination: Coordinates, maxTransfers = 1, resultLimit = 5, now = new Date()): Journey[] {
     const originStops = this.nearbyStops(origin, 650, 12);
     const destinationStops = this.nearbyStops(destination, 650, 12);
 
@@ -142,91 +145,98 @@ class JourneyPlanner {
     }
 
     const journeys: Journey[] = [];
-    journeys.push(...this.findDirectJourneys(origin, destination, originStops, destinationStops));
+    journeys.push(...this.findDirectJourneys(origin, destination, originStops, destinationStops, now));
 
     if (maxTransfers >= 1) {
-      journeys.push(...this.findOneTransferJourneys(origin, destination, originStops, destinationStops));
+      journeys.push(...this.findOneTransferJourneys(origin, destination, originStops, destinationStops, now));
     }
 
+    const seenSignatures = new Set<string>();
     const ranked = journeys
       .sort((a, b) => a.score - b.score)
-      .filter((journey, index, arr) => {
+      .filter((journey) => {
         const signature = this.journeySignature(journey);
-        return arr.findIndex((candidate) => this.journeySignature(candidate) === signature) === index;
+        if (seenSignatures.has(signature)) return false;
+        seenSignatures.add(signature);
+        return true;
       });
 
-    return this.diversifyJourneys(ranked, resultLimit);
+    return this.labelJourneys(this.diversifyJourneys(ranked, resultLimit));
   }
 
   private buildIndexes(): void {
-    const busStops = stopsData as BusStop[];
-    const busStopByWialon = new Map<number, JourneyStop>();
+    const graphCore = graphCoreData as TransitGraphCore;
+    const schedules = schedulesData as TransitGraphSchedules;
+    const stopById = new Map<string, JourneyStop>();
 
-    busStops.forEach((stop) => {
-      if (!stop.wialonId) return;
+    schedules.frequencies.forEach((frequency) => {
+      const entries = this.frequenciesByPattern.get(frequency.patternId) ?? [];
+      entries.push(frequency);
+      this.frequenciesByPattern.set(frequency.patternId, entries);
+    });
+
+    schedules.departures.forEach((schedule) => {
+      const entries = this.departuresByPattern.get(schedule.patternId) ?? [];
+      entries.push(schedule);
+      this.departuresByPattern.set(schedule.patternId, entries);
+    });
+
+    graphCore.stops.forEach((stop) => {
       const journeyStop: JourneyStop = {
-        id: `bus:${stop.wialonId}`,
-        sourceId: stop.wialonId,
+        id: stop.id,
+        sourceId: stop.sourceId,
         name: stop.name,
-        mode: 'bus',
+        mode: stop.mode,
         coordinates: stop.coordinates,
         lines: stop.lines,
       };
       this.stops.push(journeyStop);
-      busStopByWialon.set(stop.wialonId, journeyStop);
+      stopById.set(stop.id, journeyStop);
     });
 
-    (routesData as LineRoutes[]).forEach((lineRoutes) => {
-      lineRoutes.routes.forEach((route) => {
-        const stops = route.stopIds
-          .map((stopId) => busStopByWialon.get(stopId))
-          .filter((stop): stop is JourneyStop => !!stop);
-        if (stops.length >= 2) {
-          this.patterns.push({
-            id: `bus:${route.routeId}`,
-            mode: 'bus',
-            line: lineRoutes.line,
-            stops,
-          });
-        }
-      });
-    });
+    graphCore.patterns.forEach((pattern: TransitGraphPattern) => {
+      const stops = pattern.stopIds
+        .map((stopId) => stopById.get(stopId))
+        .filter((stop): stop is JourneyStop => !!stop);
 
-    const tramNetwork = tramData as TramNetwork;
-    const tramStops = tramNetwork.stops.map((stop) => this.toTramStop(stop));
-    this.stops.push(...tramStops);
-
-    tramNetwork.lines.forEach((line) => {
-      const orderedStops = this.orderTramStops(line, tramStops);
-      if (orderedStops.length >= 2) {
-          this.patterns.push({
-            id: `tram:${line.id}`,
-            mode: 'tram',
-            line: line.ref || line.name,
-            stops: orderedStops,
-            shapeCoordinates: line.paths.flat(),
-          });
-        }
-      });
-
-    (dolmusData as DolmusLine[]).forEach((line, lineIndex) => {
-      const stops = line.waypoints
-        .filter((waypoint) => waypoint.coordinates)
-        .map((waypoint, waypointIndex) => this.toDolmusStop(line, waypoint, lineIndex, waypointIndex));
-      this.stops.push(...stops);
+      // Keep offsets aligned with the filtered stop list, not the raw stopIds.
+      const stopOffsetsMin = pattern.stopOffsetsMin
+        ? pattern.stopIds
+            .map((stopId, index) => ({ stopId, offset: pattern.stopOffsetsMin?.[index] ?? null }))
+            .filter((entry) => stopById.has(entry.stopId))
+            .map((entry) => entry.offset)
+        : undefined;
 
       if (stops.length >= 2) {
         this.patterns.push({
-          id: `dolmus:${line.line}`,
-          mode: 'dolmus',
-          line: line.line,
+          id: pattern.id,
+          mode: pattern.mode,
+          line: pattern.line,
           stops,
-          shapeCoordinates: line.path,
+          segmentMeters: pattern.segmentMeters,
+          stopOffsetsMin,
+          scheduleIds: pattern.scheduleIds,
+          defaultWaitMin: pattern.defaultWaitMin ?? this.defaultWaitForMode(pattern.mode),
         });
       }
     });
 
+    graphCore.transfers.forEach((transfer) => {
+      const toStop = stopById.get(transfer.toStopId);
+      if (!toStop) return;
+
+      const transfers = this.transferIndex.get(transfer.fromStopId) ?? [];
+      transfers.push({ stop: toStop, distance: transfer.distanceMeters });
+      this.transferIndex.set(transfer.fromStopId, transfers);
+    });
+
     this.buildStopPatternIndex();
+  }
+
+  private defaultWaitForMode(mode: Exclude<TransitMode, 'walk'>): number {
+    if (mode === 'tram') return 6;
+    if (mode === 'dolmus') return 8;
+    return 10;
   }
 
   private buildStopPatternIndex(): void {
@@ -237,47 +247,6 @@ class JourneyPlanner {
         this.stopPatternIndex.set(stop.id, matches);
       });
     });
-  }
-
-  private toTramStop(stop: TramStop): JourneyStop {
-    return {
-      id: `tram:${stop.id}`,
-      sourceId: stop.id,
-      name: stop.name,
-      mode: 'tram',
-      coordinates: stop.coordinates,
-      lines: stop.lines,
-    };
-  }
-
-  private toDolmusStop(
-    line: DolmusLine,
-    waypoint: DolmusWaypoint,
-    lineIndex: number,
-    waypointIndex: number
-  ): JourneyStop {
-    return {
-      id: `dolmus:${lineIndex}:${waypointIndex}`,
-      name: waypoint.name,
-      mode: 'dolmus',
-      coordinates: waypoint.coordinates as Coordinates,
-      lines: [line.line],
-    };
-  }
-
-  private orderTramStops(line: TramLine, stops: JourneyStop[]): JourneyStop[] {
-    const path = line.paths.flat();
-    if (path.length < 2) return [];
-
-    return stops
-      .filter((stop) => stop.lines.includes(line.ref))
-      .map((stop) => {
-        const nearest = nearestPointOnPath(stop.coordinates, path);
-        return nearest ? { stop, cumulative: nearest.cumulativeMeters } : null;
-      })
-      .filter((entry): entry is { stop: JourneyStop; cumulative: number } => !!entry)
-      .sort((a, b) => a.cumulative - b.cumulative)
-      .map((entry) => entry.stop);
   }
 
   private nearbyStops(point: Coordinates, radiusMeters: number, fallbackLimit: number): NearbyStop[] {
@@ -326,19 +295,22 @@ class JourneyPlanner {
     origin: Coordinates,
     destination: Coordinates,
     originStops: NearbyStop[],
-    destinationStops: NearbyStop[]
+    destinationStops: NearbyStop[],
+    now: Date
   ): Journey[] {
     const journeys: Journey[] = [];
-    const destinationByStopId = new Map(destinationStops.map((entry) => [entry.stop.id, entry]));
+    const destMatchesByPattern = this.destinationMatchesByPattern(destinationStops);
 
     for (const originStop of originStops) {
       const originMatches = this.stopPatternIndex.get(originStop.stop.id) ?? [];
 
       for (const { pattern, index: fromIndex } of originMatches) {
-        for (let toIndex = fromIndex + 1; toIndex < pattern.stops.length; toIndex += 1) {
-          const destinationStop = destinationByStopId.get(pattern.stops[toIndex].id);
-          if (!destinationStop) continue;
-          const transitLeg = this.createTransitLeg(pattern, fromIndex, toIndex);
+        const destMatches = destMatchesByPattern.get(pattern.id);
+        if (!destMatches) continue;
+
+        for (const { index: toIndex, entry: destinationStop } of destMatches) {
+          if (toIndex <= fromIndex) continue;
+          const transitLeg = this.createTransitLeg(pattern, fromIndex, toIndex, now);
           const walkToStart = this.createWalkLeg('Konumun', originStop.stop.name, originStop.distance, [
             origin,
             originStop.stop.coordinates,
@@ -360,41 +332,45 @@ class JourneyPlanner {
     origin: Coordinates,
     destination: Coordinates,
     originStops: NearbyStop[],
-    destinationStops: NearbyStop[]
+    destinationStops: NearbyStop[],
+    now: Date
   ): Journey[] {
     const journeys: Journey[] = [];
-    const destinationByStopId = new Map(destinationStops.map((entry) => [entry.stop.id, entry]));
+    const destMatchesByPattern = this.destinationMatchesByPattern(destinationStops);
 
     for (const originStop of originStops) {
       const originMatches = this.stopPatternIndex.get(originStop.stop.id) ?? [];
+      const walkToStart = this.createWalkLeg('Konumun', originStop.stop.name, originStop.distance, [
+        origin,
+        originStop.stop.coordinates,
+      ]);
 
       for (const { pattern: firstPattern, index: fromIndex } of originMatches) {
         const maxTransferIndex = Math.min(firstPattern.stops.length, fromIndex + 14);
         for (let transferFromIndex = fromIndex + 1; transferFromIndex < maxTransferIndex; transferFromIndex += 1) {
           const transferFrom = firstPattern.stops[transferFromIndex];
-          const transferCandidates = this.nearbyStopsWithin(transferFrom.coordinates, 250, 3);
+          const transferCandidates = this.transferCandidatesForStop(transferFrom);
+          // Built lazily: most transfer candidates never reach a destination pattern.
+          let firstLeg: TransitLeg | null = null;
 
           for (const transferTo of transferCandidates) {
             const secondMatches = this.stopPatternIndex.get(transferTo.stop.id) ?? [];
 
             for (const { pattern: secondPattern, index: transferToIndex } of secondMatches) {
               if (secondPattern.id === firstPattern.id) continue;
+              const destMatches = destMatchesByPattern.get(secondPattern.id);
+              if (!destMatches) continue;
 
-              for (let toIndex = transferToIndex + 1; toIndex < secondPattern.stops.length; toIndex += 1) {
-                const destinationStop = destinationByStopId.get(secondPattern.stops[toIndex].id);
-                if (!destinationStop) continue;
-                const firstLeg = this.createTransitLeg(firstPattern, fromIndex, transferFromIndex);
+              for (const { index: toIndex, entry: destinationStop } of destMatches) {
+                if (toIndex <= transferToIndex) continue;
+                firstLeg = firstLeg ?? this.createTransitLeg(firstPattern, fromIndex, transferFromIndex, now);
                 const transferWalk = this.createWalkLeg(
                   transferFrom.name,
                   transferTo.stop.name,
                   transferTo.distance,
                   [transferFrom.coordinates, transferTo.stop.coordinates]
                 );
-                const secondLeg = this.createTransitLeg(secondPattern, transferToIndex, toIndex);
-                const walkToStart = this.createWalkLeg('Konumun', originStop.stop.name, originStop.distance, [
-                  origin,
-                  originStop.stop.coordinates,
-                ]);
+                const secondLeg = this.createTransitLeg(secondPattern, transferToIndex, toIndex, now);
                 const walkToDestination = this.createWalkLeg(destinationStop.stop.name, 'Hedef', destinationStop.distance, [
                   destinationStop.stop.coordinates,
                   destination,
@@ -411,14 +387,47 @@ class JourneyPlanner {
     return journeys;
   }
 
-  private createTransitLeg(pattern: LinePattern, fromIndex: number, toIndex: number): TransitLeg {
+  private destinationMatchesByPattern(
+    destinationStops: NearbyStop[]
+  ): Map<string, Array<{ index: number; entry: NearbyStop }>> {
+    const matchesByPattern = new Map<string, Array<{ index: number; entry: NearbyStop }>>();
+
+    destinationStops.forEach((entry) => {
+      (this.stopPatternIndex.get(entry.stop.id) ?? []).forEach(({ pattern, index }) => {
+        const matches = matchesByPattern.get(pattern.id) ?? [];
+        matches.push({ index, entry });
+        matchesByPattern.set(pattern.id, matches);
+      });
+    });
+
+    return matchesByPattern;
+  }
+
+  private transferCandidatesForStop(stop: JourneyStop): NearbyStop[] {
+    const graphTransfers = this.transferIndex.get(stop.id);
+    if (graphTransfers && graphTransfers.length > 0) {
+      return graphTransfers.slice(0, 4);
+    }
+
+    // Full-stop scans are expensive; cache per stop so repeated visits are free.
+    const cached = this.transferFallbackCache.get(stop.id);
+    if (cached) return cached;
+
+    const fallback = this.nearbyStopsWithin(stop.coordinates, 250, 3);
+    this.transferFallbackCache.set(stop.id, fallback);
+    return fallback;
+  }
+
+  private createTransitLeg(pattern: LinePattern, fromIndex: number, toIndex: number, now: Date): TransitLeg {
     const coordinates = this.getTransitLegCoordinates(pattern, fromIndex, toIndex);
     const distanceMeters =
-      coordinates.length > 2
+      distanceAlongSegments(pattern.segmentMeters, fromIndex, toIndex) ??
+      (coordinates.length > 2
         ? distanceAlongCoordinates(coordinates)
-        : distanceAlongStops(pattern.stops, fromIndex, toIndex);
+        : distanceAlongStops(pattern.stops, fromIndex, toIndex));
     const averageSpeed = pattern.mode === 'tram' ? 24 : config.app.defaultBusSpeedKmh;
     const approxMin = roundMinutes(((distanceMeters * 1.25) / 1000 / averageSpeed) * 60);
+    const waitMin = this.waitMinutesForPattern(pattern, fromIndex, now);
 
     return {
       type: 'transit',
@@ -428,39 +437,67 @@ class JourneyPlanner {
       toStop: pattern.stops[toIndex],
       numStops: toIndex - fromIndex,
       approxMin,
+      waitMin,
       coordinates,
     };
   }
 
-  private getTransitLegCoordinates(pattern: LinePattern, fromIndex: number, toIndex: number): Coordinates[] {
-    const fallback = pattern.stops.slice(fromIndex, toIndex + 1).map((stop) => stop.coordinates);
+  private waitMinutesForPattern(pattern: LinePattern, fromIndex: number, now: Date): number {
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const serviceId = this.serviceIdForDate(now);
+    // Terminal departure times are shifted by the measured travel time to the boarding stop.
+    const boardingOffsetMin = pattern.stopOffsetsMin?.[fromIndex] ?? 0;
+    const departureWait = this.waitMinutesFromDepartures(pattern.id, serviceId, nowMin, boardingOffsetMin);
+    if (departureWait !== null) return departureWait;
 
-    if (!pattern.shapeCoordinates || pattern.shapeCoordinates.length < 2) {
-      return fallback;
-    }
+    const frequencyWait = this.waitMinutesFromFrequencies(pattern.id, serviceId, nowMin);
+    if (frequencyWait !== null) return frequencyWait;
 
-    const from = nearestPointOnPath(pattern.stops[fromIndex].coordinates, pattern.shapeCoordinates);
-    const to = nearestPointOnPath(pattern.stops[toIndex].coordinates, pattern.shapeCoordinates);
-    if (!from || !to || from.cumulativeMeters >= to.cumulativeMeters) {
-      return fallback;
-    }
-
-    const cumulative = this.pathCumulativeDistances(pattern.shapeCoordinates);
-    const middle = pattern.shapeCoordinates.filter((_, index) => {
-      const meters = cumulative[index];
-      return meters > from.cumulativeMeters && meters < to.cumulativeMeters;
-    });
-
-    const coordinates = [from.point, ...middle, to.point];
-    return coordinates.length >= 2 ? coordinates : fallback;
+    return pattern.defaultWaitMin;
   }
 
-  private pathCumulativeDistances(path: Coordinates[]): number[] {
-    const distances = [0];
-    for (let i = 1; i < path.length; i += 1) {
-      distances.push(distances[i - 1] + calculateHaversineDistance(path[i - 1], path[i]));
-    }
-    return distances;
+  private serviceIdForDate(date: Date): TransitServiceId {
+    const day = date.getDay();
+    if (day === 0) return 'sunday';
+    if (day === 6) return 'saturday';
+    return 'weekday';
+  }
+
+  private waitMinutesFromDepartures(
+    patternId: string,
+    serviceId: TransitServiceId,
+    nowMin: number,
+    boardingOffsetMin = 0
+  ): number | null {
+    const schedules = this.departuresByPattern.get(patternId) ?? [];
+    const schedule = schedules.find((entry) => entry.serviceId === serviceId) ?? schedules.find((entry) => entry.serviceId === 'weekday');
+    if (!schedule || schedule.departureMins.length === 0) return null;
+
+    const arrivalsAtStop = schedule.departureMins.map((minute) => minute + boardingOffsetMin);
+    const nextToday = arrivalsAtStop.find((minute) => minute >= nowMin);
+    const nextArrival = nextToday ?? arrivalsAtStop[0] + MINUTES_PER_DAY;
+    return Math.max(0, Math.round(nextArrival - nowMin));
+  }
+
+  private waitMinutesFromFrequencies(patternId: string, serviceId: TransitServiceId, nowMin: number): number | null {
+    const frequencies = this.frequenciesByPattern.get(patternId) ?? [];
+    const candidates = frequencies
+      .filter((entry) => entry.serviceId === serviceId || (serviceId === 'saturday' && entry.serviceId === 'weekday'))
+      .sort((a, b) => a.startMin - b.startMin);
+
+    if (candidates.length === 0) return null;
+
+    const active = candidates.find((entry) => nowMin >= entry.startMin && nowMin <= entry.endMin);
+    if (active) return Math.max(1, Math.round(active.headwayMin / 2));
+
+    const upcoming = candidates.find((entry) => nowMin < entry.startMin);
+    if (upcoming) return Math.max(0, Math.round(upcoming.startMin - nowMin));
+
+    return Math.max(0, Math.round(candidates[0].startMin + MINUTES_PER_DAY - nowMin));
+  }
+
+  private getTransitLegCoordinates(pattern: LinePattern, fromIndex: number, toIndex: number): Coordinates[] {
+    return pattern.stops.slice(fromIndex, toIndex + 1).map((stop) => stop.coordinates);
   }
 
   private createWalkLeg(
@@ -480,15 +517,29 @@ class JourneyPlanner {
   }
 
   private createJourney(legs: JourneyLeg[], transfers: number): Journey {
-    const totalApproxMin = legs.reduce((sum, leg) => sum + leg.approxMin, 0) + transfers * TRANSFER_PENALTY_MIN;
+    const waitMinutes = legs.reduce((sum, leg) => (leg.type === 'transit' ? sum + leg.waitMin : sum), 0);
+    const totalApproxMin = legs.reduce((sum, leg) => sum + leg.approxMin, 0) + waitMinutes + transfers * TRANSFER_PENALTY_MIN;
     const walkMeters = legs.reduce((sum, leg) => (leg.type === 'walk' ? sum + leg.distanceMeters : sum), 0);
+    const modePenalty = this.modePenalty(legs);
 
     return {
       legs,
       transfers,
+      walkMeters,
       totalApproxMin: roundMinutes(totalApproxMin),
-      score: totalApproxMin + walkMeters / 250,
+      score: totalApproxMin + walkMeters / 220 + transfers * 2 + modePenalty,
+      labels: [],
     };
+  }
+
+  private modePenalty(legs: JourneyLeg[]): number {
+    const transitModes = legs
+      .filter((leg): leg is TransitLeg => leg.type === 'transit')
+      .map((leg) => leg.mode);
+
+    if (transitModes.includes('tram')) return -2;
+    if (transitModes.includes('dolmus')) return 1;
+    return 0;
   }
 
   private journeySignature(journey: Journey): string {
@@ -526,6 +577,32 @@ class JourneyPlanner {
     }
 
     return selected;
+  }
+
+  private labelJourneys(journeys: Journey[]): Journey[] {
+    if (journeys.length === 0) return journeys;
+
+    const fastest = journeys.reduce((best, journey) =>
+      journey.totalApproxMin < best.totalApproxMin ? journey : best
+    );
+    const leastWalking = journeys.reduce((best, journey) =>
+      journey.walkMeters < best.walkMeters ? journey : best
+    );
+
+    return journeys.map((journey) => {
+      const labels: JourneyLabel[] = [];
+      const transitModes = journey.legs
+        .filter((leg): leg is TransitLeg => leg.type === 'transit')
+        .map((leg) => leg.mode);
+
+      if (journey === fastest) labels.push('fastest');
+      if (journey === leastWalking && journey !== fastest) labels.push('leastWalking');
+      if (transitModes.includes('tram')) labels.push('tram');
+      if (transitModes.includes('dolmus')) labels.push('dolmus');
+      if (labels.length === 0) labels.push('balanced');
+
+      return { ...journey, labels: labels.slice(0, 2) };
+    });
   }
 }
 

@@ -7,6 +7,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build:transit-graph": "node scripts/build-transit-graph.js",
+    "benchmark:transit-routing": "node scripts/benchmark-transit-routing.js",
+    "check:transit-graph": "node scripts/check-transit-graph.js",
+    "validate:transit": "npm run build:transit-graph && npm run check:transit-graph && npm run benchmark:transit-routing && npm run typecheck",
+    "typecheck": "tsc --noEmit",
     "build:apk": "eas build --platform android --profile preview"
   },
   "dependencies": {

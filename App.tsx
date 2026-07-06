@@ -51,7 +51,7 @@ function AppContent() {
         return true;
       }
 
-      return false;
+      return true;
     });
 
     return () => subscription.remove();
@@ -96,7 +96,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
+      <ThemeProvider forcedTheme="dark">
         <AppContent />
         <Toast />
       </ThemeProvider>

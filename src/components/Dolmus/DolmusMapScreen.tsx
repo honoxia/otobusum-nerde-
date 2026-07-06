@@ -7,7 +7,6 @@ import { useTheme } from '../../theme';
 import { config } from '../../config';
 import { buildOsmHtml } from '../Map/osmMapHtml';
 import { AppTopBar } from '../common/AppTopBar';
-import { AppBottomNav } from '../common/AppBottomNav';
 import { DolmusDaySchedule, DolmusLine } from '../../types/shared-types';
 import { useLocation } from '../../hooks/useLocation';
 import dolmusService from '../../services/dolmus/DolmusService';
@@ -121,7 +120,6 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
         <View style={styles.emptyState}>
           <Text style={[styles.empty, { color: colors.textTertiary }]}>Dolmuş verisi henüz yok.</Text>
         </View>
-        <AppBottomNav active="home" onHome={onBack} />
       </View>
     );
   }
@@ -313,7 +311,6 @@ export const DolmusMapScreen: React.FC<DolmusMapScreenProps> = ({ lines, onBack 
         </ScrollView>
       </View>
 
-      <AppBottomNav active="home" onHome={onBack} />
     </View>
   );
 };

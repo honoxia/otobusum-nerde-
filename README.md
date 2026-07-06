@@ -1,43 +1,79 @@
 # Otobusum Nerde
 
-Eskisehir ilindeki otobusleri gercek zamanli olarak takip edebileceginiz mobil uygulama.
+Eskisehir icin otobus, tramvay, dolmus ve guzergah planlama odakli mobil ulasim rehberi.
 
-## Ozellikler
+Uygulama Expo/React Native ile gelistirilir. Varsayilan harita modu OpenStreetMap + WebView/Leaflet'tir; Google Maps provider opsiyonel olarak acilabilir. Android paket adi `com.honoxia.otobusumnerde`, uygulama surumu `1.0.1` olarak yapilandirilmistir.
 
-- **Gercek Zamanli Otobus Takibi**: MQTT uzerinden canli otobus konumlarini haritada gorun
-- **ETA Hesaplama**: Sectiginiz hat icin en yakin duraga tahmini varis suresi
-- **Akilli Yon Tespiti**: Otobuslerin hangi yonde gittigini rota bazli analiz ile belirler
-- **Durak Bazli Sorgulama**: En yakin duraklarinizi otomatik bulur
-- **Tarifeli Varis Zamanlari**: Canli arac yoksa Nimbus API'den tarifeli varis zamanlarini gosterir
-- **Harita Uzerinde Gosterim**: Otobusler (kirmizi daire + hat numarasi) ve duraklar (mavi pin) farkli gorunur
+## Guncel kapsam
 
-## Teknik Altyapi
+- **Ana menu**: Otobus, tramvay, dolmus ve guzergah planlama ekranlari.
+- **Otobus**: MQTT/Flespi uzerinden canli arac konumlari, en yakin durak, hat sorgusu, yon secimi, ETA hesabi ve Nimbus tarifeli varis yedegi.
+- **Tramvay**: OSM tabanli tramvay agi, en yakin tramvay duragi, canli Nimbus durak verisi varsa canli gecisler, yoksa yaz tarifesi ve durak offset'lerine dayali beklenen saatler.
+- **Dolmus**: Hat listesi, gidis/donus yonleri, harita uzerinde guzergah, hafta ici/cumartesi/pazar hareket saatleri ve kullaniciya en yakin rota bacagina gore siradaki gecis.
+- **Guzergah planlama**: Mevcut konumdan durak arama veya haritadan hedef secme; otobus, tramvay ve dolmus agi uzerinde direkt veya tek aktarmali alternatifler.
+- **Harita yedegi**: OSM/WebView yuklenemezse durak ve arac bilgilerini liste modunda gosteren fallback ekran.
+
+## Veri ozeti
+
+| Veri | Adet |
+| --- | ---: |
+| Otobus duragi | 2748 |
+| Otobus rotasi | 114 |
+| Tramvay duragi | 135 |
+| Tramvay hatti | 10 |
+| Dolmus hatti | 6 |
+| Transit graph duragi | 2919 |
+| Transit graph pattern'i | 299 |
+| Transfer baglantisi | 4619 |
+| Frekans tarifesi | 16 |
+| Kalkis tarifesi | 30 |
+
+## Teknik altyapi
 
 | Teknoloji | Kullanim |
-|-----------|----------|
-| React Native + Expo | Mobil uygulama framework'u |
+| --- | --- |
+| Expo SDK 54 | Mobil uygulama ve EAS build altyapisi |
+| React Native 0.81 | Native ekranlar ve bilesenler |
 | TypeScript | Tip guvenligi |
-| react-native-maps | Google Maps entegrasyonu |
-| MQTT.js | Gercek zamanli otobus konumlari (Flespi) |
-| Nimbus/Wialon API | Tarifeli varis zamanlari |
+| React Native WebView | OSM/Leaflet haritasi ve rota cizimleri |
+| react-native-maps | Opsiyonel Google Maps provider |
+| precompiled-mqtt | Canli otobus konumlari |
+| Wialon/Nimbus | Tarifeli ve canli durak verisi |
+| expo-location | Kullanici konumu ve yakin durak hesaplari |
+| expo-speech | Otobus ETA sonucunu seslendirme |
 
-## Mimari
+## Proje yapisi
 
-```
+```text
 src/
-├── components/          # UI bilesenleri
-│   ├── Map/            # Harita, BusMarker, StopMarker
-│   ├── ETACard/        # ETA gosterim karti
-│   └── QueryInput/     # Hat sorgulama inputu
-├── services/           # Is mantigi
-│   ├── MqttService.ts  # MQTT baglantisi
-│   ├── ETAService.ts   # ETA hesaplama algoritmasi
-│   ├── NimbusService.ts # Nimbus API entegrasyonu
-│   ├── stops/          # Durak verileri ve servisi
-│   └── routes/         # Rota verileri ve servisi
-├── hooks/              # React hooks
-├── types/              # TypeScript tipleri
-└── config/             # Yapilandirma
+|-- components/
+|   |-- BottomSheet/        # Durak detay sheet'i
+|   |-- Dolmus/             # Dolmus liste ve harita ekranlari
+|   |-- Map/                # OSM, Google Maps, marker ve harita HTML'i
+|   |-- StopCard/           # En yakin durak karti
+|   |-- ETACard/            # Otobus ETA sonuc karti
+|   `-- common/             # Ortak UI bilesenleri
+|-- data/
+|   |-- transit/            # Transit graph, shapes ve tarifeler
+|   |-- stops-data.json     # Otobus duraklari
+|   |-- routes-data.json    # Otobus rotalari
+|   |-- tram-data.json      # Tramvay agi
+|   |-- tram-schedule.json  # Tramvay tarife verisi
+|   `-- dolmus-data.json    # Dolmus guzergah ve saatleri
+|-- hooks/                  # Konum, durak ve canli arac hook'lari
+|-- screens/                # Home, Bus, Tram, Route Planner ekranlari
+|-- services/
+|   |-- dolmus/             # Dolmus gecis ve rota hesaplari
+|   |-- mqtt/               # MQTT baglantisi
+|   |-- routes/             # Otobus rota servisi
+|   |-- routing/            # JourneyPlanner
+|   |-- stops/              # Durak servisi
+|   |-- tram/               # Tramvay ve Nimbus servisleri
+|   |-- ETAService.ts       # Otobus ETA algoritmasi
+|   `-- NimbusService.ts    # Otobus tarifeli veri entegrasyonu
+|-- theme/                  # Renk, spacing ve typography sistemi
+|-- types/                  # Ortak TypeScript tipleri
+`-- utils/                  # Geo, query parser ve graph yardimcilari
 ```
 
 ## Kurulum
@@ -45,88 +81,86 @@ src/
 ### Gereksinimler
 
 - Node.js 18+
-- npm veya yarn
-- Expo CLI
-- Android Studio (APK build icin)
-- Google Maps API Key
+- npm
+- Expo CLI veya `npx expo`
+- Android Studio / Android SDK (native Android calistirma veya APK icin)
+- EAS CLI (EAS build icin)
 
-### Adimlar
-
-1. **Bagimliliklari yukleyin:**
+### Bagimliliklar
 
 ```bash
 npm install
 ```
 
-2. **Ortam degiskenlerini ayarlayin:**
+### Ortam degiskenleri
 
-```bash
-cp .env.example .env
-```
-
-`.env` dosyasini duzenleyin:
+`.env` dosyasi olusturup ihtiyac duyulan degerleri girin:
 
 ```env
-# Google Maps (Android build icin zorunlu)
-EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
+# Harita
+EXPO_PUBLIC_MAP_PROVIDER=osm
+EXPO_PUBLIC_MAP_TILE_URL=https://tile.openstreetmap.org/{z}/{x}/{y}.png
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=
 
-# Flespi MQTT token'i uygulama icine gomulmez.
-# Canli public token Nimbus locator sayfasindan calisma aninda cekilir.
+# Otobus canli veri / filtreleme
+FLESPI_CHANNEL_ID=
+FLESPI_DEVICE_IDS=
 
-# Nimbus (opsiyonel - tarifeli zamanlar icin)
-NIMBUS_LOCATOR_HASH=your_hash
+# Nimbus locator override'lari
+NIMBUS_LOCATOR_HASH=
+EXPO_PUBLIC_TRAM_NIMBUS_LOCATOR_HASH=
 ```
 
-3. **Uygulamayi baslatın (gelistirme):**
+Notlar:
+
+- `EXPO_PUBLIC_MAP_PROVIDER=osm` varsayilan ve ucretsiz moddur.
+- Google Maps kullanmak icin `EXPO_PUBLIC_MAP_PROVIDER=google` ve `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` gerekir.
+- Flespi token uygulama icine gomulmez; servis canli public token'i calisma aninda locator sayfasindan alacak sekilde tasarlanmistir.
+- Nimbus locator hash degerleri config icinde varsayilanlara sahiptir; ortam degiskenleri override icindir.
+
+## Calistirma
 
 ```bash
-npx expo start
+npm run start
+npm run android
+npm run ios
+npm run web
 ```
 
-4. **APK olusturma:**
+## Dogrulama ve veri uretimi
 
 ```bash
-# EAS ile build
-npx eas build --platform android --profile preview
-
-# veya lokal build
-npx expo prebuild --platform android
-cd android && ./gradlew assembleRelease
+npm run typecheck
+npm run build:transit-graph
+npm run check:transit-graph
+npm run benchmark:transit-routing
+npm run validate:transit
 ```
 
-## API Key Alma
+Script ozeti:
 
-### Google Maps API Key
+- `build:transit-graph`: Otobus, tramvay ve dolmus verilerinden transit graph ciktisi uretir.
+- `check:transit-graph`: Graph, shape, tarife ve transfer tutarliligini denetler.
+- `benchmark:transit-routing`: Rota planlama performansi icin smoke/benchmark calistirir.
+- `validate:transit`: Graph build, graph check, routing benchmark ve TypeScript kontrolunu tek komutta calistirir.
 
-1. [Google Cloud Console](https://console.cloud.google.com)'a gidin
-2. Yeni proje olusturun
-3. "Maps SDK for Android" API'sini etkinlestirin
-4. Credentials > Create Credentials > API Key
-5. (Onerilen) Key'i Android uygulamanizla kisitlayin
+## Android build
 
-### Flespi Token
+```bash
+npm run build:apk
+```
 
-1. [Flespi](https://flespi.com)'de hesap olusturun
-2. Token olusturun
-3. MQTT channel ayarlayin
+EAS profilleri:
 
-## ETA Hesaplama Algoritmasi
+- `development`: Development client, internal distribution.
+- `preview`: Internal APK.
+- `production`: Android App Bundle ve auto increment.
 
-Uygulama su adimlari izler:
-
-1. Kullanicinin GPS konumunu al
-2. En yakin duraklari bul (1km icinde)
-3. Sorgulanan hatin o duraklardan gecip gecmedigini kontrol et
-4. O hattaki araclarin konumlarini MQTT'den al
-5. Aracin rotasinin hedefe duragina ugrayip ugramayacagini kontrol et
-6. Yaklasan araclari filtrele (heading + rota analizi)
-7. ETA hesapla: `(mesafe x 1.25) / hiz + (durak sayisi x 25 sn)`
-8. Arac yoksa Nimbus'tan tarifeli zamanları goster
-
-## Ekran Goruntusu
+## Ekran goruntusu
 
 ![Uygulama ekran goruntusu](assets/screenshots/app.jpg)
 
-## Lisans
+## Notlar
 
-MIT
+- Tramvay tarafinda kapali/native-imzali ASIS API'leri kullanilmaz. Mevcut model public ESTRAM/Nimbus verisi, OSM geometrisi ve olculmus/doldurulmus durak offset'leri ile calisir.
+- Canli veri olmadiginda uygulama tarifeli tahminleri saklamaya ve kullaniciya kaynak durumunu gostermeye odaklanir.
