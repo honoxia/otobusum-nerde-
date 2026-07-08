@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { BusStop } from '../../types/shared-types';
@@ -30,12 +30,7 @@ export const StopCard: React.FC<StopCardProps> = ({ stop, distance, onLinePress,
         </View>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-        style={styles.chipScroll}
-      >
+      <View style={styles.chips}>
         {stop.lines.map((line) => {
           const active = selectedLine === line;
           return (
@@ -50,11 +45,19 @@ export const StopCard: React.FC<StopCardProps> = ({ stop, distance, onLinePress,
                   : { backgroundColor: colors.surfaceSecondary },
               ]}
             >
-              <Text style={[styles.chipText, { color: active ? colors.primaryLight : colors.textSecondary }]}>{line}</Text>
+              <Text
+                style={[styles.chipText, { color: active ? colors.primaryLight : colors.textSecondary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                maxFontSizeMultiplier={1.15}
+              >
+                {line}
+              </Text>
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -63,16 +66,19 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     borderRadius: 12,
-    padding: 16,
-    gap: 8,
+    padding: 14,
+    gap: 10,
   },
   left: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 190,
+    minWidth: 0,
   },
   iconCircle: {
     width: 40,
@@ -82,31 +88,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textCol: {
+    flex: 1,
     flexShrink: 1,
+    minWidth: 0,
   },
   name: {
     fontSize: 14,
     fontWeight: '700',
+    lineHeight: 19,
   },
   distance: {
     fontSize: 12,
     marginTop: 2,
   },
-  chipScroll: {
-    flexGrow: 0,
-    flexShrink: 0,
-    maxWidth: '38%',
-  },
   chips: {
-    gap: 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
     alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexShrink: 1,
+    flexGrow: 1,
+    flexBasis: 96,
   },
   chip: {
-    paddingHorizontal: 8,
+    minWidth: 44,
+    maxWidth: 64,
+    paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 6,
   },
   chipText: {
+    textAlign: 'center',
     fontSize: 12,
     fontWeight: '600',
   },

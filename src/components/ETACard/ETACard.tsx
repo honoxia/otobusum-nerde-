@@ -36,13 +36,35 @@ export const ETACard: React.FC<ETACardProps> = ({ result }) => {
           <View style={styles.headerLeft}>
             {result.line && (
               <View style={[styles.lineBadge, { backgroundColor: s.color }]}>
-                <Text style={styles.lineBadgeText}>{result.line}</Text>
+                <Text
+                  style={styles.lineBadgeText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                  maxFontSizeMultiplier={1.2}
+                >
+                  {result.line}
+                </Text>
               </View>
             )}
-            <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
+            <Text
+              style={[styles.statusText, { color: s.color }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+              maxFontSizeMultiplier={1.15}
+            >
+              {s.label}
+            </Text>
           </View>
           {result.stopName && (
-            <Text style={[styles.stopName, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[styles.stopName, { color: colors.textSecondary }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+              maxFontSizeMultiplier={1.15}
+            >
               {result.stopName}
             </Text>
           )}
@@ -51,8 +73,12 @@ export const ETACard: React.FC<ETACardProps> = ({ result }) => {
         {s.showMinutes && result.etaMinutes != null ? (
           <>
             <View style={styles.etaRow}>
-              <Text style={[styles.etaBig, { color: colors.textPrimary }]}>{result.etaMinutes}</Text>
-              <Text style={[styles.etaUnit, { color: colors.textSecondary }]}>dakika</Text>
+              <Text style={[styles.etaBig, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.08}>
+                {result.etaMinutes}
+              </Text>
+              <Text style={[styles.etaUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.15}>
+                dakika
+              </Text>
             </View>
             {result.distance != null && (
               <Text style={[styles.distance, { color: colors.textSecondary }]}>
@@ -102,14 +128,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+    flexWrap: 'wrap',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     flexShrink: 1,
+    flexGrow: 1,
+    minWidth: 0,
   },
   lineBadge: {
+    minWidth: 48,
+    maxWidth: 76,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -123,17 +154,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
     flexShrink: 1,
+    minWidth: 0,
   },
   stopName: {
     fontSize: 12,
+    flexBasis: '100%',
     flexShrink: 1,
     textAlign: 'right',
+    marginTop: 4,
   },
   etaRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 14,
   },

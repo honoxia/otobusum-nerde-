@@ -394,13 +394,14 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
           <View style={[styles.searchInputWrap, { backgroundColor: theme.colors.surfaceSecondary }]}>
             <TextInput
               style={[styles.searchInput, { color: theme.colors.textPrimary }]}
-              placeholder="Örn: 54 ne zaman gelecek?"
+              placeholder="Hat no veya soru"
               placeholderTextColor={theme.colors.textTertiary}
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={handleSubmit}
               returnKeyType="search"
               editable={!loading}
+              maxFontSizeMultiplier={1.15}
             />
             {sttEnabled && (
               <TouchableOpacity
@@ -419,7 +420,7 @@ export const BusScreen: React.FC<BusScreenProps> = ({ onBack }) => {
             disabled={!query.trim() || loading}
             activeOpacity={0.85}
           >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.askBtnText}>Sor</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.askBtnText} maxFontSizeMultiplier={1.15}>Sor</Text>}
           </TouchableOpacity>
         </View>
       </View>
@@ -545,15 +546,17 @@ const styles = StyleSheet.create({
   },
   searchInputWrap: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
+    minHeight: 56,
     borderRadius: 12,
-    paddingLeft: 16,
+    paddingLeft: 14,
     paddingRight: 4,
   },
   searchInput: {
     flex: 1,
+    minWidth: 0,
     fontSize: 16,
   },
   micBtn: {
@@ -563,8 +566,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   askBtn: {
-    height: 56,
-    paddingHorizontal: 24,
+    minWidth: 76,
+    minHeight: 56,
+    paddingHorizontal: 14,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',

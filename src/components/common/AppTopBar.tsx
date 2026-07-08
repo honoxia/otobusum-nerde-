@@ -24,7 +24,15 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({ onBack, leftIcon }) => {
       ) : (
         <View style={styles.iconBtn} />
       )}
-      <Text style={[styles.brand, { color: colors.primaryLight }]}>Ulaşım Rehberi</Text>
+      <Text
+        style={[styles.brand, { color: colors.primaryLight }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.72}
+        maxFontSizeMultiplier={1.15}
+      >
+        Eskişehir Ulaşım
+      </Text>
       <View style={styles.iconBtn} />
     </View>
   );
@@ -46,8 +54,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brand: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: 20,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
 });
