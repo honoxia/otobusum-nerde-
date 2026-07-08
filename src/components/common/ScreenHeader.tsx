@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 
 interface ScreenHeaderProps {
@@ -14,8 +15,14 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({ title, subtitle, onB
   return (
     <View style={[styles.header, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
       {onBack ? (
-        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-          <Text style={[styles.backText, { color: theme.colors.primary }]}>‹ Ana menü</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBack}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Geri"
+        >
+          <MaterialIcons name="arrow-back" size={24} color={theme.colors.textSecondary} />
         </TouchableOpacity>
       ) : (
         <View style={styles.backPlaceholder} />
@@ -45,15 +52,13 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingRight: 10,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backPlaceholder: {
-    height: 24,
-  },
-  backText: {
-    fontSize: 15,
-    fontWeight: '700',
+    height: 32,
   },
   titleWrap: {
     gap: 2,
