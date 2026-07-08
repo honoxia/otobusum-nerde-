@@ -4,7 +4,7 @@ const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
 export default {
   expo: {
-    name: "Eskişehir Ulaşım Rehberi",
+    name: "Eskişehir Ulaşım",
     slug: "otobusum-nerde",
     version: "1.0.1",
     orientation: "portrait",
