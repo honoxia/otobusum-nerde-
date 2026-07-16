@@ -1,166 +1,173 @@
-# Otobusum Nerde
+<div align="center">
+  <img src="assets/icon.png" width="112" alt="Eskişehir Ulaşım uygulama ikonu">
+  <h1>Eskişehir Ulaşım</h1>
+  <p>Otobüs, tramvay ve dolmuş yolculukları için açık kaynaklı mobil ulaşım rehberi.</p>
+</div>
 
-Eskisehir icin otobus, tramvay, dolmus ve guzergah planlama odakli mobil ulasim rehberi.
+Yakındaki durağı bulur, seçilen hattın ne zaman geleceğini hesaplar, toplu taşıma güzergâhlarını haritada gösterir ve farklı ulaşım türlerini birleştiren yolculuk seçenekleri üretir.
 
-Uygulama Expo/React Native ile gelistirilir. Varsayilan harita modu OpenStreetMap + WebView/Leaflet'tir; Google Maps provider opsiyonel olarak acilabilir. Android paket adi `com.honoxia.otobusumnerde`, uygulama surumu `1.0.1` olarak yapilandirilmistir.
+<p align="center">
+  <img src="assets/screenshots/app.jpg" width="360" alt="Eskişehir Ulaşım otobüs ekranı">
+</p>
 
-## Guncel kapsam
+## Neler sunuyor?
 
-- **Ana menu**: Otobus, tramvay, dolmus ve guzergah planlama ekranlari.
-- **Otobus**: MQTT/Flespi uzerinden canli arac konumlari, en yakin durak, hat sorgusu, yon secimi, ETA hesabi ve Nimbus tarifeli varis yedegi.
-- **Tramvay**: OSM tabanli tramvay agi, en yakin tramvay duragi, canli Nimbus durak verisi varsa canli gecisler, yoksa yaz tarifesi ve durak offset'lerine dayali beklenen saatler.
-- **Dolmus**: Hat listesi, gidis/donus yonleri, harita uzerinde guzergah, hafta ici/cumartesi/pazar hareket saatleri ve kullaniciya en yakin rota bacagina gore siradaki gecis.
-- **Guzergah planlama**: Mevcut konumdan durak arama veya haritadan hedef secme; otobus, tramvay ve dolmus agi uzerinde direkt veya tek aktarmali alternatifler.
-- **Harita yedegi**: OSM/WebView yuklenemezse durak ve arac bilgilerini liste modunda gosteren fallback ekran.
+### Otobüs
 
-## Veri ozeti
+- Canlı araç konumları ve hat bazlı harita görünümü
+- Kullanıcıya en yakın uygun durağın otomatik bulunması
+- Gidiş ve dönüş yönü seçimi
+- Canlı araç verisi ile rota bazlı kalan süre hesabı
+- Canlı araç bulunmadığında Nimbus tarifeli varış bilgisi
+- ETA sonucunu sesli okuma
+
+### Tramvay
+
+- Eskişehir tramvay ağı ve hat güzergâhları
+- En yakın tramvay durağının bulunması
+- Kullanılabildiğinde canlı Nimbus geçiş bilgileri
+- Canlı veri olmadığında tarife ve durak sürelerine dayalı tahminler
+
+### Dolmuş
+
+- Kırmızı 23, Mavi 23, Yeşil 23, Siyah 5 ve Kırmızı 19 hatları
+- Yönlere ayrılmış güzergâh seçimi
+- Harita üzerinde gerçek rota geometrisi
+- Hafta içi, cumartesi ve pazar hareket saatleri
+- Kullanıcının rotaya en yakın konumu için yaklaşık geçiş süresi
+
+### Yolculuk planlama
+
+- Mevcut konumdan veya seçilen başlangıç noktasından rota oluşturma
+- Durak arayarak ya da haritadan hedef seçme
+- Otobüs, tramvay ve dolmuş seçeneklerini birlikte değerlendirme
+- Doğrudan veya tek aktarmalı yolculuk alternatifleri
+- Yürüme, bekleme ve araç içi süreleriyle yaklaşık toplam süre
+
+## Veri yaklaşımı
+
+Uygulama tek bir kaynağa bağlı kalmak yerine canlı ve statik verileri birlikte kullanır:
+
+- Otobüs konumları MQTT üzerinden alınır.
+- Nimbus, otobüs ve tramvay için canlı veya tarifeli varış kaynağı olarak kullanılır.
+- OpenStreetMap verileri harita, tramvay ağı ve güzergâh geometrilerinde kullanılır.
+- Yerel tarife ve rota verileri, canlı servislerin cevap vermediği durumlarda devamlılık sağlar.
+- Dolmuş geçişleri, bilinen hareket saatleri ile rota üzerindeki zaman noktalarından yaklaşık olarak hesaplanır.
+
+Canlı servislerin erişilemediği anlarda uygulama uygun olduğu yerde tarifeli tahmine veya liste görünümüne geçer. Gösterilen sürelerin trafik, veri gecikmesi ve işletme koşullarına göre değişebileceği unutulmamalıdır.
+
+## Mevcut veri kapsamı
 
 | Veri | Adet |
 | --- | ---: |
-| Otobus duragi | 2748 |
-| Otobus rotasi | 114 |
-| Tramvay duragi | 135 |
-| Tramvay hatti | 10 |
-| Dolmus hatti | 6 |
-| Transit graph duragi | 2919 |
-| Transit graph pattern'i | 299 |
-| Transfer baglantisi | 4619 |
-| Frekans tarifesi | 16 |
-| Kalkis tarifesi | 30 |
+| Otobüs durağı | 2.748 |
+| Otobüs rotası | 114 |
+| Tramvay durağı | 135 |
+| Tramvay hattı | 10 |
+| Dolmuş güzergâh kaydı | 7 |
+| Transit graph durağı | 2.919 |
+| Transit pattern | 299 |
+| Aktarma bağlantısı | 4.619 |
 
-## Teknik altyapi
+## Teknik yapı
 
-| Teknoloji | Kullanim |
+| Teknoloji | Kullanım |
 | --- | --- |
-| Expo SDK 54 | Mobil uygulama ve EAS build altyapisi |
-| React Native 0.81 | Native ekranlar ve bilesenler |
-| TypeScript | Tip guvenligi |
-| React Native WebView | OSM/Leaflet haritasi ve rota cizimleri |
-| react-native-maps | Opsiyonel Google Maps provider |
-| precompiled-mqtt | Canli otobus konumlari |
-| Wialon/Nimbus | Tarifeli ve canli durak verisi |
-| expo-location | Kullanici konumu ve yakin durak hesaplari |
-| expo-speech | Otobus ETA sonucunu seslendirme |
+| Expo SDK 54 | Mobil geliştirme ve EAS build altyapısı |
+| React Native 0.81 | Android ve iOS arayüzü |
+| TypeScript | Uygulama ve servis katmanlarında tip güvenliği |
+| React Native WebView + Leaflet | Varsayılan OpenStreetMap görünümü |
+| react-native-maps | İsteğe bağlı Google Maps sağlayıcısı |
+| MQTT | Canlı otobüs konumları |
+| Wialon/Nimbus | Canlı ve tarifeli durak verileri |
+| expo-location | Kullanıcı konumu ve yakın durak hesabı |
+| expo-speech | ETA sonucunun seslendirilmesi |
 
-## Proje yapisi
+## Proje yapısı
 
 ```text
 src/
-|-- components/
-|   |-- BottomSheet/        # Durak detay sheet'i
-|   |-- Dolmus/             # Dolmus liste ve harita ekranlari
-|   |-- Map/                # OSM, Google Maps, marker ve harita HTML'i
-|   |-- StopCard/           # En yakin durak karti
-|   |-- ETACard/            # Otobus ETA sonuc karti
-|   `-- common/             # Ortak UI bilesenleri
-|-- data/
-|   |-- transit/            # Transit graph, shapes ve tarifeler
-|   |-- stops-data.json     # Otobus duraklari
-|   |-- routes-data.json    # Otobus rotalari
-|   |-- tram-data.json      # Tramvay agi
-|   |-- tram-schedule.json  # Tramvay tarife verisi
-|   `-- dolmus-data.json    # Dolmus guzergah ve saatleri
-|-- hooks/                  # Konum, durak ve canli arac hook'lari
-|-- screens/                # Home, Bus, Tram, Route Planner ekranlari
-|-- services/
-|   |-- dolmus/             # Dolmus gecis ve rota hesaplari
-|   |-- mqtt/               # MQTT baglantisi
-|   |-- routes/             # Otobus rota servisi
-|   |-- routing/            # JourneyPlanner
-|   |-- stops/              # Durak servisi
-|   |-- tram/               # Tramvay ve Nimbus servisleri
-|   |-- ETAService.ts       # Otobus ETA algoritmasi
-|   `-- NimbusService.ts    # Otobus tarifeli veri entegrasyonu
-|-- theme/                  # Renk, spacing ve typography sistemi
-|-- types/                  # Ortak TypeScript tipleri
-`-- utils/                  # Geo, query parser ve graph yardimcilari
+├── components/       Arayüz bileşenleri, haritalar ve dolmuş ekranları
+├── data/             Durak, rota, tarife ve transit graph verileri
+├── hooks/            Konum, durak ve canlı araç hook'ları
+├── screens/          Ana ekran, otobüs, tramvay ve rota planlayıcı
+├── services/         ETA, MQTT, Nimbus, tramvay ve yolculuk servisleri
+├── theme/            Renk, tipografi ve ölçü sistemi
+├── types/            Ortak TypeScript tipleri
+└── utils/            Coğrafi hesaplar ve veri yardımcıları
 ```
 
 ## Kurulum
 
-### Gereksinimler
+Gereksinimler:
 
-- Node.js 18+
+- Node.js 18 veya üzeri
 - npm
-- Expo CLI veya `npx expo`
-- Android Studio / Android SDK (native Android calistirma veya APK icin)
-- EAS CLI (EAS build icin)
+- Android Studio / Android SDK veya iOS için Xcode
+- Dağıtım build'leri için EAS CLI
 
-### Bagimliliklar
+Bağımlılıkları yükleyin:
 
 ```bash
 npm install
 ```
 
-### Ortam degiskenleri
-
-`.env` dosyasi olusturup ihtiyac duyulan degerleri girin:
-
-```env
-# Harita
-EXPO_PUBLIC_MAP_PROVIDER=osm
-EXPO_PUBLIC_MAP_TILE_URL=https://tile.openstreetmap.org/{z}/{x}/{y}.png
-EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=
-
-# Otobus canli veri / filtreleme
-FLESPI_CHANNEL_ID=
-FLESPI_DEVICE_IDS=
-
-# Nimbus locator override'lari
-NIMBUS_LOCATOR_HASH=
-EXPO_PUBLIC_TRAM_NIMBUS_LOCATOR_HASH=
-```
-
-Notlar:
-
-- `EXPO_PUBLIC_MAP_PROVIDER=osm` varsayilan ve ucretsiz moddur.
-- Google Maps kullanmak icin `EXPO_PUBLIC_MAP_PROVIDER=google` ve `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` gerekir.
-- Flespi token uygulama icine gomulmez; servis canli public token'i calisma aninda locator sayfasindan alacak sekilde tasarlanmistir.
-- Nimbus locator hash degerleri config icinde varsayilanlara sahiptir; ortam degiskenleri override icindir.
-
-## Calistirma
+Geliştirme sunucusunu başlatın:
 
 ```bash
 npm run start
+```
+
+Platform komutları:
+
+```bash
 npm run android
 npm run ios
 npm run web
 ```
 
-## Dogrulama ve veri uretimi
+## Ortam değişkenleri
+
+Proje kökünde bir `.env` dosyası oluşturabilirsiniz:
+
+```env
+EXPO_PUBLIC_MAP_PROVIDER=osm
+EXPO_PUBLIC_MAP_TILE_URL=https://tile.openstreetmap.org/{z}/{x}/{y}.png
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=
+
+FLESPI_CHANNEL_ID=
+FLESPI_DEVICE_IDS=
+
+NIMBUS_LOCATOR_HASH=
+EXPO_PUBLIC_TRAM_NIMBUS_LOCATOR_HASH=
+```
+
+OpenStreetMap varsayılan sağlayıcıdır ve Google Maps anahtarı gerektirmez. Google Maps kullanmak için `EXPO_PUBLIC_MAP_PROVIDER=google` ile birlikte geçerli bir `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` tanımlanmalıdır.
+
+## Doğrulama
 
 ```bash
 npm run typecheck
-npm run build:transit-graph
 npm run check:transit-graph
 npm run benchmark:transit-routing
+```
+
+Transit verisini yeniden üretip tüm kontrolleri çalıştırmak için:
+
+```bash
 npm run validate:transit
 ```
 
-Script ozeti:
-
-- `build:transit-graph`: Otobus, tramvay ve dolmus verilerinden transit graph ciktisi uretir.
-- `check:transit-graph`: Graph, shape, tarife ve transfer tutarliligini denetler.
-- `benchmark:transit-routing`: Rota planlama performansi icin smoke/benchmark calistirir.
-- `validate:transit`: Graph build, graph check, routing benchmark ve TypeScript kontrolunu tek komutta calistirir.
-
 ## Android build
+
+EAS ile dahili APK oluşturmak için:
 
 ```bash
 npm run build:apk
 ```
 
-EAS profilleri:
+`development`, `preview` ve `production` build profilleri [eas.json](eas.json) içinde tanımlıdır.
 
-- `development`: Development client, internal distribution.
-- `preview`: Internal APK.
-- `production`: Android App Bundle ve auto increment.
+## Veri notu
 
-## Ekran goruntusu
-
-![Uygulama ekran goruntusu](assets/screenshots/app.jpg)
-
-## Notlar
-
-- Tramvay tarafinda kapali/native-imzali ASIS API'leri kullanilmaz. Mevcut model public ESTRAM/Nimbus verisi, OSM geometrisi ve olculmus/doldurulmus durak offset'leri ile calisir.
-- Canli veri olmadiginda uygulama tarifeli tahminleri saklamaya ve kullaniciya kaynak durumunu gostermeye odaklanir.
+Bu proje resmî bir belediye uygulaması değildir. Canlı konumlar ve tahmini varış süreleri bilgilendirme amaçlıdır; servis kesintileri, trafik ve işletme değişiklikleri sonuçları etkileyebilir.
