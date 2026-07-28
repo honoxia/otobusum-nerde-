@@ -27,9 +27,18 @@ export default {
     ],
     ios: {
       supportsTablet: true,
+      bundleIdentifier: "com.honoxia.otobusumnerde",
+      buildNumber: "1",
       infoPlist: {
-        NSLocationWhenInUseUsageDescription: "Konumunuz en yakın durağı bulmak için kullanılır.",
-        NSMicrophoneUsageDescription: "Hat numarası söyleyerek arama yapmak için mikrofon kullanılır."
+        NSLocationWhenInUseUsageDescription:
+          "Konumunuz en yakın durağı bulmak için kullanılır.",
+        NSMicrophoneUsageDescription:
+          "Hat numarası söyleyerek arama yapmak için mikrofon kullanılır.",
+        NSSpeechRecognitionUsageDescription:
+          "Hat numarası söyleyerek arama yapmak için konuşma tanıma kullanılır."
+      },
+      config: {
+        usesNonExemptEncryption: false
       }
     },
     android: {

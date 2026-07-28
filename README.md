@@ -168,6 +168,68 @@ npm run build:apk
 
 `development`, `preview` ve `production` build profilleri [eas.json](eas.json) içinde tanımlıdır.
 
+## iOS / App Store yayın
+
+Bundle ID: `com.honoxia.otobusumnerde` ([app.config.js](app.config.js))
+
+### 1. Apple Developer
+
+1. [Apple Developer Program](https://developer.apple.com/programs/) üyeliğini aktifleştirin.
+2. [App Store Connect](https://appstoreconnect.apple.com) → My Apps → **+** → New App:
+   - Platform: iOS
+   - Name: Eskişehir Ulaşım
+   - Bundle ID: `com.honoxia.otobusumnerde` (önce Certificates, Identifiers & Profiles’ta oluşturun)
+   - SKU: `otobusumnerde` (örnek)
+3. Oluşan uygulamanın **Apple ID** (sayısal Asc App ID) ve **Team ID** değerlerini not edin.
+4. İsteğe bağlı: [eas.json](eas.json) `submit.production.ios` altına ekleyin:
+   - `ascAppId`: App Store Connect → App Information → Apple ID
+   - `appleTeamId`: developer.apple.com → Membership → Team ID
+   - Bunlar yoksa `eas submit` sırasında sorulur.
+
+### 2. EAS hesabı ve kimlik bilgileri
+
+```bash
+npm i -g eas-cli
+eas login
+eas credentials --platform ios
+```
+
+İlk production build sırasında EAS, dağıtım sertifikası ve provisioning profilini otomatik üretebilir (`Generate new` seçeneği).
+
+Production ortam değişkenlerini Expo dashboard veya CLI ile tanımlayın (yerel `.env` cloud build’e gitmez):
+
+```bash
+eas env:create --name NIMBUS_LOCATOR_HASH --value "..." --environment production --visibility secret
+```
+
+Gerekirse `EXPO_PUBLIC_TRAM_NIMBUS_LOCATOR_HASH`, `FLESPI_CHANNEL_ID`, `FLESPI_DEVICE_IDS` için de aynı işlemi yapın.
+
+### 3. Build ve gönderim
+
+```bash
+# App Store dağıtımı için IPA
+npm run build:ios
+
+# Son build'i App Store Connect'e yükle
+npm run submit:ios
+```
+
+Dahili test (TestFlight / ad-hoc cihaz) için:
+
+```bash
+npm run build:ios:preview
+```
+
+### 4. App Store Connect checklist
+
+- Ekran görüntüleri (en az iPhone 6.7" ve 6.5")
+- Açıklama, anahtar kelimeler, destek URL’si
+- Gizlilik politikası URL’si (konum + mikrofon/konuşma tanıma)
+- Privacy Nutrition Labels (Location — When In Use)
+- Yaş derecelendirmesi ve kategori
+- Açıklamada uygulamanın resmî belediye uygulaması olmadığını belirtin
+- Review notlarında konum ve canlı otobüs verisinin nasıl test edileceğini yazın
+
 ## Veri notu
 
 Bu proje resmî bir belediye uygulaması değildir. Canlı konumlar ve tahmini varış süreleri bilgilendirme amaçlıdır; servis kesintileri, trafik ve işletme değişiklikleri sonuçları etkileyebilir.

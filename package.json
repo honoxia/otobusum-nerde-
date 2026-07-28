@@ -12,7 +12,10 @@
     "check:transit-graph": "node scripts/check-transit-graph.js",
     "validate:transit": "npm run build:transit-graph && npm run check:transit-graph && npm run benchmark:transit-routing && npm run typecheck",
     "typecheck": "tsc --noEmit",
-    "build:apk": "eas build --platform android --profile preview"
+    "build:apk": "eas build --platform android --profile preview",
+    "build:ios": "eas build --platform ios --profile production",
+    "build:ios:preview": "eas build --platform ios --profile preview",
+    "submit:ios": "eas submit --platform ios --profile production --latest"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
