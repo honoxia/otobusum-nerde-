@@ -168,67 +168,35 @@ npm run build:apk
 
 `development`, `preview` ve `production` build profilleri [eas.json](eas.json) içinde tanımlıdır.
 
-## iOS / App Store yayın
+## iOS / App Store
 
-Bundle ID: `com.honoxia.otobusumnerde` ([app.config.js](app.config.js))
+Bundle ID: `com.honoxia.otobusumnerde`
 
-### 1. Apple Developer
+Hazır olanlar: EAS iOS config, mağaza metinleri (`store/ios/`), ekran görüntüleri, gizlilik/destek sayfaları (`docs/`), tek tık GitHub Action (`.github/workflows/publish-ios.yml`).
 
-1. [Apple Developer Program](https://developer.apple.com/programs/) üyeliğini aktifleştirin.
-2. [App Store Connect](https://appstoreconnect.apple.com) → My Apps → **+** → New App:
-   - Platform: iOS
-   - Name: Eskişehir Ulaşım
-   - Bundle ID: `com.honoxia.otobusumnerde` (önce Certificates, Identifiers & Profiles’ta oluşturun)
-   - SKU: `otobusumnerde` (örnek)
-3. Oluşan uygulamanın **Apple ID** (sayısal Asc App ID) ve **Team ID** değerlerini not edin.
-4. İsteğe bağlı: [eas.json](eas.json) `submit.production.ios` altına ekleyin:
-   - `ascAppId`: App Store Connect → App Information → Apple ID
-   - `appleTeamId`: developer.apple.com → Membership → Team ID
-   - Bunlar yoksa `eas submit` sırasında sorulur.
+### Tek seferlik hesap bağlama
 
-### 2. EAS hesabı ve kimlik bilgileri
+Apple ve Expo senin hesabın; bu adımlar uzaktan yapılamaz:
 
-```bash
-npm i -g eas-cli
-eas login
-eas credentials --platform ios
-```
+1. [Apple Developer Program](https://developer.apple.com/programs/) üyeliği (yıllık)
+2. App Store Connect’te uygulama oluştur (Bundle ID: `com.honoxia.otobusumnerde`)
+3. GitHub → Settings → Secrets and variables → Actions:
+   - `EXPO_TOKEN` → [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens)
+   - `EXPO_APPLE_APP_SPECIFIC_PASSWORD` → [appleid.apple.com](https://appleid.apple.com) → App-Specific Passwords  
+     **veya** Asc API Key secret’ları: `EXPO_ASC_API_KEY_ID`, `EXPO_ASC_API_KEY_ISSUER_ID`, `EXPO_ASC_API_KEY_P8`
+4. Actions → **Publish iOS (EAS)** → Run workflow (`auto_submit: true`)
 
-İlk production build sırasında EAS, dağıtım sertifikası ve provisioning profilini otomatik üretebilir (`Generate new` seçeneği).
+Gizlilik URL’si (Pages açılınca): https://honoxia.github.io/otobusum-nerde-/privacy.html
 
-Production ortam değişkenlerini Expo dashboard veya CLI ile tanımlayın (yerel `.env` cloud build’e gitmez):
+Yerel alternatif:
 
 ```bash
-eas env:create --name NIMBUS_LOCATOR_HASH --value "..." --environment production --visibility secret
+export EXPO_TOKEN=...
+export EXPO_APPLE_APP_SPECIFIC_PASSWORD=...
+npm run publish:ios
 ```
 
-Gerekirse `EXPO_PUBLIC_TRAM_NIMBUS_LOCATOR_HASH`, `FLESPI_CHANNEL_ID`, `FLESPI_DEVICE_IDS` için de aynı işlemi yapın.
-
-### 3. Build ve gönderim
-
-```bash
-# App Store dağıtımı için IPA
-npm run build:ios
-
-# Son build'i App Store Connect'e yükle
-npm run submit:ios
-```
-
-Dahili test (TestFlight / ad-hoc cihaz) için:
-
-```bash
-npm run build:ios:preview
-```
-
-### 4. App Store Connect checklist
-
-- Ekran görüntüleri (en az iPhone 6.7" ve 6.5")
-- Açıklama, anahtar kelimeler, destek URL’si
-- Gizlilik politikası URL’si (konum + mikrofon/konuşma tanıma)
-- Privacy Nutrition Labels (Location — When In Use)
-- Yaş derecelendirmesi ve kategori
-- Açıklamada uygulamanın resmî belediye uygulaması olmadığını belirtin
-- Review notlarında konum ve canlı otobüs verisinin nasıl test edileceğini yazın
+Mağaza metinleri ve review notları: [store/ios/metadata.json](store/ios/metadata.json) · ekran görüntüleri: [store/ios/screenshots](store/ios/screenshots)
 
 ## Veri notu
 

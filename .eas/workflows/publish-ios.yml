@@ -1,0 +1,20 @@
+name: Publish iOS
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build iOS
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit:
+    name: Submit to App Store Connect
+    type: submit
+    needs: [build]
+    params:
+      platform: ios
+      profile: production

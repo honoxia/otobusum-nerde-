@@ -11,6 +11,8 @@ export default {
     icon: "./assets/icon.png",
     userInterfaceStyle: "dark",
     newArchEnabled: true,
+    primaryColor: "#0ea5e9",
+    githubUrl: "https://github.com/honoxia/otobusum-nerde-",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -40,6 +42,9 @@ export default {
       config: {
         usesNonExemptEncryption: false
       }
+    },
+    locales: {
+      tr: "./store/ios/tr.json"
     },
     android: {
       adaptiveIcon: {

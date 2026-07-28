@@ -15,7 +15,8 @@
     "build:apk": "eas build --platform android --profile preview",
     "build:ios": "eas build --platform ios --profile production",
     "build:ios:preview": "eas build --platform ios --profile preview",
-    "submit:ios": "eas submit --platform ios --profile production --latest"
+    "submit:ios": "eas submit --platform ios --profile production --latest",
+    "publish:ios": "bash scripts/publish-ios.sh production"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
