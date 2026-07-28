@@ -168,35 +168,26 @@ npm run build:apk
 
 `development`, `preview` ve `production` build profilleri [eas.json](eas.json) içinde tanımlıdır.
 
-## iOS / App Store
+## iOS / App Store (Mac + Xcode — önerilen)
 
-Bundle ID: `com.honoxia.otobusumnerde`
+Bundle ID: `com.honoxia.otobusumnerde`  
+Detaylı adımlar: [store/ios/MAC_XCODE.md](store/ios/MAC_XCODE.md)
 
-Hazır olanlar: EAS iOS config, mağaza metinleri (`store/ios/`), ekran görüntüleri, gizlilik/destek sayfaları (`docs/`), tek tık GitHub Action (`.github/workflows/publish-ios.yml`).
-
-### Tek seferlik hesap bağlama
-
-Apple ve Expo senin hesabın; bu adımlar uzaktan yapılamaz:
-
-1. [Apple Developer Program](https://developer.apple.com/programs/) üyeliği (yıllık)
-2. App Store Connect’te uygulama oluştur (Bundle ID: `com.honoxia.otobusumnerde`)
-3. GitHub → Settings → Secrets and variables → Actions:
-   - `EXPO_TOKEN` → [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens)
-   - `EXPO_APPLE_APP_SPECIFIC_PASSWORD` → [appleid.apple.com](https://appleid.apple.com) → App-Specific Passwords  
-     **veya** Asc API Key secret’ları: `EXPO_ASC_API_KEY_ID`, `EXPO_ASC_API_KEY_ISSUER_ID`, `EXPO_ASC_API_KEY_P8`
-4. Actions → **Publish iOS (EAS)** → Run workflow (`auto_submit: true`)
-
-Gizlilik URL’si (Pages açılınca): https://honoxia.github.io/otobusum-nerde-/privacy.html
-
-Yerel alternatif:
+Harici **honoxia** diskinde tek komut:
 
 ```bash
-export EXPO_TOKEN=...
-export EXPO_APPLE_APP_SPECIFIC_PASSWORD=...
-npm run publish:ios
+git clone -b cursor/ios-app-store-publish-4cee https://github.com/honoxia/otobusum-nerde-.git
+cd otobusum-nerde-
+bash scripts/mac-xcode-setup.sh
 ```
 
-Mağaza metinleri ve review notları: [store/ios/metadata.json](store/ios/metadata.json) · ekran görüntüleri: [store/ios/screenshots](store/ios/screenshots)
+Script: bağımlılıklar → `expo prebuild` → `pod install` → Xcode’u açar.  
+Sonra Xcode’da **Signing** (Team) → **Product → Archive** → **Distribute App**.
+
+Mağaza metinleri: [store/ios/metadata.json](store/ios/metadata.json) · ekran görüntüleri: [store/ios/screenshots](store/ios/screenshots)
+
+### Alternatif: EAS cloud
+Mac kullanmadan: `.github/workflows/publish-ios.yml` + `EXPO_TOKEN` secret.
 
 ## Veri notu
 
