@@ -11,6 +11,8 @@ export default {
     icon: "./assets/icon.png",
     userInterfaceStyle: "dark",
     newArchEnabled: true,
+    primaryColor: "#0ea5e9",
+    githubUrl: "https://github.com/honoxia/otobusum-nerde-",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -27,10 +29,22 @@ export default {
     ],
     ios: {
       supportsTablet: true,
+      bundleIdentifier: "com.honoxia.otobusumnerde",
+      buildNumber: "1",
       infoPlist: {
-        NSLocationWhenInUseUsageDescription: "Konumunuz en yakın durağı bulmak için kullanılır.",
-        NSMicrophoneUsageDescription: "Hat numarası söyleyerek arama yapmak için mikrofon kullanılır."
+        NSLocationWhenInUseUsageDescription:
+          "Konumunuz en yakın durağı bulmak için kullanılır.",
+        NSMicrophoneUsageDescription:
+          "Hat numarası söyleyerek arama yapmak için mikrofon kullanılır.",
+        NSSpeechRecognitionUsageDescription:
+          "Hat numarası söyleyerek arama yapmak için konuşma tanıma kullanılır."
+      },
+      config: {
+        usesNonExemptEncryption: false
       }
+    },
+    locales: {
+      tr: "./store/ios/tr.json"
     },
     android: {
       adaptiveIcon: {

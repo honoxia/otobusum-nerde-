@@ -168,6 +168,27 @@ npm run build:apk
 
 `development`, `preview` ve `production` build profilleri [eas.json](eas.json) içinde tanımlıdır.
 
+## iOS / App Store (Mac + Xcode — önerilen)
+
+Bundle ID: `com.honoxia.otobusumnerde`  
+Detaylı adımlar: [store/ios/MAC_XCODE.md](store/ios/MAC_XCODE.md)
+
+Harici **honoxia** diskinde tek komut:
+
+```bash
+git clone -b cursor/ios-app-store-publish-4cee https://github.com/honoxia/otobusum-nerde-.git
+cd otobusum-nerde-
+bash scripts/mac-xcode-setup.sh
+```
+
+Script: bağımlılıklar → `expo prebuild` → `pod install` → Xcode’u açar.  
+Sonra Xcode’da **Signing** (Team) → **Product → Archive** → **Distribute App**.
+
+Mağaza metinleri: [store/ios/metadata.json](store/ios/metadata.json) · ekran görüntüleri: [store/ios/screenshots](store/ios/screenshots)
+
+### Alternatif: EAS cloud
+Mac kullanmadan: `.github/workflows/publish-ios.yml` + `EXPO_TOKEN` secret.
+
 ## Veri notu
 
 Bu proje resmî bir belediye uygulaması değildir. Canlı konumlar ve tahmini varış süreleri bilgilendirme amaçlıdır; servis kesintileri, trafik ve işletme değişiklikleri sonuçları etkileyebilir.

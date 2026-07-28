@@ -1,0 +1,8 @@
+# App Store Connect'e yapıştırılacak metinler
+# Kaynak: store/ios/metadata.json
+
+NAME=Eskişehir Ulaşım
+SUBTITLE=Otobüs, tramvay, dolmuş rehberi
+PRIVACY=https://honoxia.github.io/otobusum-nerde-/privacy.html
+SUPPORT=https://honoxia.github.io/otobusum-nerde-/support.html
+KEYWORDS=eskişehir,otobüs,tramvay,dolmuş,ulaşım,hat,durak,eta,toplu taşıma,şehir

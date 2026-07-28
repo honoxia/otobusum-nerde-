@@ -1,0 +1,83 @@
+name: Publish iOS (EAS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - preview
+      auto_submit:
+        description: Build sonrası App Store Connect'e gönder
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: publish-ios
+  cancel-in-progress: false
+
+jobs:
+  build-and-submit:
+    name: EAS iOS build
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Require EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN secret eksik. https://expo.dev/settings/access-tokens"
+            exit 1
+          fi
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare App Store Connect API key
+        env:
+          P8: ${{ secrets.EXPO_ASC_API_KEY_P8 }}
+          KEY_ID: ${{ secrets.EXPO_ASC_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.EXPO_ASC_API_KEY_ISSUER_ID }}
+        run: |
+          if [ -n "$P8" ]; then
+            printf '%s\n' "$P8" > AuthKey.p8
+            echo "EXPO_ASC_API_KEY_PATH=$PWD/AuthKey.p8" >> "$GITHUB_ENV"
+            echo "EXPO_ASC_API_KEY_ID=$KEY_ID" >> "$GITHUB_ENV"
+            echo "EXPO_ASC_API_KEY_ISSUER_ID=$ISSUER_ID" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build iOS
+        env:
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          SUBMIT_FLAG=""
+          if [ "${{ inputs.auto_submit }}" = "true" ]; then
+            SUBMIT_FLAG="--auto-submit"
+          fi
+          eas build \
+            --platform ios \
+            --profile "${{ inputs.profile }}" \
+            --non-interactive \
+            --no-wait \
+            $SUBMIT_FLAG

@@ -1,0 +1,33 @@
+{
+  "name": "Eskişehir Ulaşım",
+  "subtitle": "Otobüs, tramvay, dolmuş rehberi",
+  "privacyPolicyUrl": "https://honoxia.github.io/otobusum-nerde-/privacy.html",
+  "supportUrl": "https://honoxia.github.io/otobusum-nerde-/support.html",
+  "marketingUrl": "https://honoxia.github.io/otobusum-nerde-/",
+  "primaryCategory": "NAVIGATION",
+  "secondaryCategory": "TRAVEL",
+  "contentRights": "Does not use third-party content",
+  "ageRating": "4+",
+  "keywords": "eskişehir,otobüs,tramvay,dolmuş,ulaşım,hat,durak,eta,toplu taşıma,şehir",
+  "promotionalText": "Yakındaki durağı bul, canlı hatları takip et, aktarmalı yolculuk planla.",
+  "description": "Eskişehir Ulaşım; otobüs, tramvay ve dolmuş yolculukları için açık kaynaklı bir mobil rehberdir. Resmî bir belediye uygulaması değildir.\n\nÖne çıkan özellikler:\n• En yakın durağı otomatik bulma\n• Canlı otobüs konumları ve tahmini varış süresi (ETA)\n• Tramvay hatları ve durak bilgileri\n• Dolmuş güzergâhları ve hareket saatleri\n• Otobüs + tramvay + dolmuş seçenekleriyle yolculuk planlama\n• ETA sonucunu sesli okuma\n\nNot: Canlı konumlar ve süreler bilgilendirme amaçlıdır; trafik, veri gecikmesi ve işletme koşullarına göre değişebilir.",
+  "whatsNew": "İlk iOS sürümü: otobüs, tramvay, dolmuş ve yolculuk planlama.",
+  "reviewNotes": "Test için Eskişehir içinde konum izni verin. Ana ekrandan Otobüs’e girip bir hat numarası arayın. Canlı araç verisi anlık olarak gelmezse tarifeli/ETA tahmini gösterilir. Uygulama resmî belediye uygulaması değildir; açık kaynaklı bilgilendirme aracıdır.\n\nDemo hesabı yoktur. Konum izni zorunludur (When In Use). Mikrofon yalnızca sesli hat araması için isteğe bağlıdır.",
+  "privacyNutritionLabels": {
+    "location": {
+      "purpose": "App Functionality",
+      "linkedToUser": false,
+      "usedForTracking": false,
+      "dataType": "Precise Location",
+      "collected": true
+    },
+    "audio": {
+      "purpose": "App Functionality",
+      "linkedToUser": false,
+      "usedForTracking": false,
+      "dataType": "Audio Data",
+      "collected": false,
+      "note": "Mikrofon sesi saklanmaz; yalnızca isteğe bağlı sesli arama anında kullanılır."
+    }
+  }
+}
