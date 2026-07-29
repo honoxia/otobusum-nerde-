@@ -42,6 +42,7 @@ yarn-error.*
 
 # local build/cache
 .claude/
+app-store-screenshots/
 
 # personal notes
 CLAUDE.md
