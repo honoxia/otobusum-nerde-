@@ -21,15 +21,18 @@ export default {
       [
         "expo-location",
         {
+          locationAlwaysAndWhenInUsePermission: false,
+          locationAlwaysPermission: false,
           locationWhenInUsePermission: "Konumunuz en yakın durağı bulmak için kullanılır."
         }
       ]
     ],
     ios: {
-      supportsTablet: true,
+      bundleIdentifier: "com.honoxia.otobusumnerde",
+      supportsTablet: false,
       infoPlist: {
         NSLocationWhenInUseUsageDescription: "Konumunuz en yakın durağı bulmak için kullanılır.",
-        NSMicrophoneUsageDescription: "Hat numarası söyleyerek arama yapmak için mikrofon kullanılır."
+        ITSAppUsesNonExemptEncryption: false
       }
     },
     android: {

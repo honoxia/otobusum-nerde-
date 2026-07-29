@@ -168,6 +168,28 @@ npm run build:apk
 
 `development`, `preview` ve `production` build profilleri [eas.json](eas.json) içinde tanımlıdır.
 
+## iOS build ve App Store gönderimi
+
+Aktif bir Apple Developer hesabıyla production iOS build'i oluşturmak için:
+
+```bash
+npm run build:ios
+```
+
+Build tamamlandıktan sonra son production build'ini App Store Connect'e göndermek için:
+
+```bash
+npm run submit:ios
+```
+
+iOS bundle kimliği `com.honoxia.otobusumnerde` olarak tanımlıdır. İlk gönderimden
+önce aynı bundle kimliğiyle App Store Connect'te uygulama kaydı oluşturulmalıdır.
+
+## Destek ve gizlilik
+
+- [Destek](SUPPORT.md)
+- [Gizlilik Politikası](PRIVACY.md)
+
 ## Veri notu
 
 Bu proje resmî bir belediye uygulaması değildir. Canlı konumlar ve tahmini varış süreleri bilgilendirme amaçlıdır; servis kesintileri, trafik ve işletme değişiklikleri sonuçları etkileyebilir.
